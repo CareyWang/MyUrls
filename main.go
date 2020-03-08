@@ -45,7 +45,7 @@ func main() {
 			ShortUrl: "",
 		}
 
-		longUrl := context.Query("longUrl")
+		longUrl := context.PostForm("longUrl")
 		_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
 		longUrl = string(_longUrl)
 

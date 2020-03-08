@@ -20,7 +20,6 @@ type Response struct {
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 const defaultPort int = 8002
-const defaultDomain = "s.wcc.best"
 const defaultExpire = 90
 const redisConfig = "127.0.0.1:6379"
 
@@ -29,9 +28,14 @@ func main() {
 	router := gin.Default()
 
 	port := flag.Int("port", defaultPort, "服务端口")
-	domain := flag.String("domain", defaultDomain, "短链接域名")
+	domain := flag.String("domain", "", "短链接域名，必填项")
 	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
 	flag.Parse()
+
+	if *domain == "" {
+		flag.Usage()
+		return
+	}
 
 	router.POST("/short", func(context *gin.Context) {
 		res := &Response{

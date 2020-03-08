@@ -54,7 +54,7 @@ make
 
 Usage of ./build/myurls.service:
   -domain string
-        短链接域名 (default "s.wcc.best")
+        短链接域名，必填项
   -port int
         服务端口 (default 8002)
   -ttl int

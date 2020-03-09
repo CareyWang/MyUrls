@@ -46,6 +46,12 @@ func main() {
 		}
 
 		longUrl := context.PostForm("longUrl")
+		if longUrl == "" {
+			res.Message = "longUrl为空"
+			context.JSON(400, *res)
+			return
+		}
+		
 		_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
 		longUrl = string(_longUrl)
 

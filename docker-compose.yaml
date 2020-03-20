@@ -1,0 +1,19 @@
+version: "3"
+services:
+  myurls:
+    build: .
+    container_name: myurls
+    restart: always
+    env_file: .env
+    ports:
+      - "${MYURLS_PORT}:8002"
+    depends_on:
+      - redis
+    entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", redis:6379, "-ttl", "${MYURLS_TTL}"]
+
+  redis:
+    image: "redis:5"
+    container_name: redis
+    restart: always
+    expose:
+      - "6379"

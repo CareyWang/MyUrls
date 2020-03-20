@@ -29,7 +29,16 @@ sudo apt-get install redis-server -y
 
 ## Docker 
 
-TODO
+现在你可以无需安装其他服务，使用 [docker-compose](https://docs.docker.com/compose/install/) 部署本项目。注：请自行修改 .env 中参数。
+
+```shell script
+git clone https://github.com/CareyWang/MyUrls.git MyUrls
+
+cd MyUrls
+cp .env.example .env
+
+docker-compose up -d
+```
 
 ## Install
 

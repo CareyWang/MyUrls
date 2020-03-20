@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
+	"log"
 	"math/rand"
 	"net/http"
 )
@@ -21,7 +22,10 @@ const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVW
 
 const defaultPort int = 8002
 const defaultExpire = 90
-const redisConfig = "127.0.0.1:6379"
+const defaultRedisConfig = "127.0.0.1:6379"
+
+var redisConfig string
+var redisClient redis.Conn
 
 func main() {
 	gin.SetMode(gin.ReleaseMode)
@@ -30,12 +34,16 @@ func main() {
 	port := flag.Int("port", defaultPort, "服务端口")
 	domain := flag.String("domain", "", "短链接域名，必填项")
 	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
+	conn := flag.String("conn", defaultRedisConfig, "Redis连接，格式: host:port")
 	flag.Parse()
 
 	if *domain == "" {
 		flag.Usage()
-		return
+		log.Fatalln("缺少关键参数")
 	}
+
+	redisConfig = *conn
+	redisClient = initRedis()
 
 	router.POST("/short", func(context *gin.Context) {
 		res := &Response{
@@ -84,16 +92,12 @@ func main() {
 
 // 短链接转长链接
 func shortToLong(shortKey string) string {
-	redisClient := initRedis()
-
 	longUrl, _ := redis.String(redisClient.Do("get", shortKey))
 	return longUrl
 }
 
 // 长链接转短链接
 func longToShort(longUrl string, ttl int) string {
-	redisClient := initRedis()
-
 	// 是否生成过该长链接对应短链接
 	_existsKey, _ := redis.String(redisClient.Do("get", longUrl))
 	if _existsKey != "" {
@@ -133,7 +137,10 @@ func generate(bits int) string {
 }
 
 func initRedis() redis.Conn {
-	client, _ := redis.Dial("tcp", redisConfig)
+	client, err := redis.Dial("tcp", redisConfig)
 
+	if err != nil {
+		log.Fatalln(err.Error())
+	}
 	return client
 }

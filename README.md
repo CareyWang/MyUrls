@@ -50,15 +50,17 @@ make
 前往 [Release](https://github.com/CareyWang/MyUrls/releases) 下载对应平台可执行文件。
 
 ```shell script
-./build/myurls -h 
+./build/linux-amd64-myurls.service -h 
 
-Usage of ./build/myurls.service:
+Usage of ./build/linux-amd64-myurls.service:
+  -conn string
+    	Redis连接，格式: host:port (default "127.0.0.1:6379")
   -domain string
-        短链接域名，必填项
+    	短链接域名，必填项
   -port int
-        服务端口 (default 8002)
+    	服务端口 (default 8002)
   -ttl int
-        短链接有效期，单位(天)，默认90天。 (default 90)
+    	短链接有效期，单位(天)，默认90天。 (default 90)
 ```
 
 建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。

@@ -9,6 +9,7 @@ import (
 	"log"
 	"math/rand"
 	"net/http"
+	"time"
 )
 
 type Response struct {
@@ -18,13 +19,24 @@ type Response struct {
 	ShortUrl string
 }
 
+type redisPoolConf struct {
+	maxIdle        int
+	maxActive      int
+	maxIdleTimeout int
+	host           string
+	password       string
+	db             int
+	handleTimeout  int
+}
+
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 const defaultPort int = 8002
 const defaultExpire = 90
 const defaultRedisConfig = "127.0.0.1:6379"
 
-var redisConfig string
+var redisPool *redis.Pool
+var redisPoolConfig *redisPoolConf
 var redisClient redis.Conn
 
 func main() {
@@ -35,6 +47,7 @@ func main() {
 	domain := flag.String("domain", "", "短链接域名，必填项")
 	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
 	conn := flag.String("conn", defaultRedisConfig, "Redis连接，格式: host:port")
+	passwd := flag.String("passwd", "", "Redis连接密码")
 	flag.Parse()
 
 	if *domain == "" {
@@ -42,8 +55,16 @@ func main() {
 		log.Fatalln("缺少关键参数")
 	}
 
-	redisConfig = *conn
-	redisClient = initRedis()
+	redisPoolConfig = &redisPoolConf{
+		maxIdle:        1024,
+		maxActive:      1024,
+		maxIdleTimeout: 30,
+		host:           *conn,
+		password:       *passwd,
+		db:             0,
+		handleTimeout:  30,
+	}
+	initRedisPool()
 
 	router.POST("/short", func(context *gin.Context) {
 		res := &Response{
@@ -59,11 +80,11 @@ func main() {
 			context.JSON(400, *res)
 			return
 		}
-		
+
 		_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
 		longUrl = string(_longUrl)
 
-		shortKey := longToShort(longUrl, *ttl * 24 * 3600)
+		shortKey := longToShort(longUrl, *ttl*24*3600)
 		if shortKey == "" {
 			res.Code = 0
 			res.Message = "短链接生成失败"
@@ -92,12 +113,18 @@ func main() {
 
 // 短链接转长链接
 func shortToLong(shortKey string) string {
+	redisClient = redisPool.Get()
+	defer redisClient.Close()
+
 	longUrl, _ := redis.String(redisClient.Do("get", shortKey))
 	return longUrl
 }
 
 // 长链接转短链接
 func longToShort(longUrl string, ttl int) string {
+	redisClient = redisPool.Get()
+	defer redisClient.Close()
+
 	// 是否生成过该长链接对应短链接
 	_existsKey, _ := redis.String(redisClient.Do("get", longUrl))
 	if _existsKey != "" {
@@ -136,11 +163,24 @@ func generate(bits int) string {
 	return string(b)
 }
 
-func initRedis() redis.Conn {
-	client, err := redis.Dial("tcp", redisConfig)
-
-	if err != nil {
-		log.Fatalln(err.Error())
+func initRedisPool() {
+	// 建立连接池
+	redisPool = &redis.Pool{
+		MaxIdle:     redisPoolConfig.maxIdle,
+		MaxActive:   redisPoolConfig.maxActive,
+		IdleTimeout: time.Duration(redisPoolConfig.maxIdleTimeout) * time.Second,
+		Wait:        true,
+		Dial: func() (redis.Conn, error) {
+			con, err := redis.Dial("tcp", redisPoolConfig.host,
+				redis.DialPassword(redisPoolConfig.password),
+				redis.DialDatabase(redisPoolConfig.db),
+				redis.DialConnectTimeout(time.Duration(redisPoolConfig.handleTimeout)*time.Second),
+				redis.DialReadTimeout(time.Duration(redisPoolConfig.handleTimeout)*time.Second),
+				redis.DialWriteTimeout(time.Duration(redisPoolConfig.handleTimeout)*time.Second))
+			if err != nil {
+				return nil, err
+			}
+			return con, nil
+		},
 	}
-	return client
 }

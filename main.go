@@ -92,6 +92,8 @@ func main() {
 			return
 		}
 
+		log.Println(longUrl, shortKey)
+
 		res.LongUrl = longUrl
 		res.ShortUrl = "http://" + *domain + "/" + shortKey
 		context.JSON(200, *res)
@@ -130,6 +132,7 @@ func longToShort(longUrl string, ttl int) string {
 	if _existsKey != "" {
 		_, _ = redisClient.Do("expire", _existsKey, ttl)
 
+		log.Println("Hit cache: " + _existsKey)
 		return _existsKey
 	}
 

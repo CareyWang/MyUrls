@@ -53,6 +53,7 @@ func main() {
 	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
 	conn := flag.String("conn", defaultRedisConfig, "Redis连接，格式: host:port")
 	passwd := flag.String("passwd", "", "Redis连接密码")
+	https := flag.Int("https", 0, "是否返回 https 短链接")
 	flag.Parse()
 
 	if *domain == "" {
@@ -100,7 +101,13 @@ func main() {
 		log.Println(longUrl, shortKey)
 
 		res.LongUrl = longUrl
-		res.ShortUrl = "http://" + *domain + "/" + shortKey
+
+		protocol := "http://"
+		if *https != 0 {
+			protocol = "https://"
+		}
+		res.ShortUrl = protocol + *domain + "/" + shortKey
+
 		context.JSON(200, *res)
 	})
 

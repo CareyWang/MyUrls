@@ -1,6 +1,6 @@
 FROM golang:1.13-alpine AS dependencies 
 WORKDIR /app
-RUN go env -w GO111MODULE="on" && go env -w GOPROXY="https://goproxy.cn,direct"
+RUN go env -w GO111MODULE="on"
 
 COPY go.sum go.mod ./
 RUN go mod tidy 

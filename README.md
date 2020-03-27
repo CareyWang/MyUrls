@@ -29,7 +29,11 @@ sudo apt-get install redis-server -y
 
 ## Docker 
 
-现在你可以无需安装其他服务，使用 [docker-compose](https://docs.docker.com/compose/install/) 部署本项目。注：请自行修改 .env 中参数。
+现在你可以无需安装其他服务，使用 docker 或 [docker-compose](https://docs.docker.com/compose/install/) 部署本项目。注：请自行修改 .env 中参数。
+
+```
+docker run -d --restart always --name myurls careywong/myurls:latest -domain example.com -port 8002 -conn 127.0.0.1:6379 -passwd '' -ttl 90
+```
 
 ```shell script
 git clone https://github.com/CareyWang/MyUrls.git MyUrls
@@ -63,13 +67,15 @@ make
 
 Usage of ./build/linux-amd64-myurls.service:
   -conn string
-    	Redis连接，格式: host:port (default "127.0.0.1:6379")
+        Redis连接，格式: host:port (default "127.0.0.1:6379")
   -domain string
-    	短链接域名，必填项
+        短链接域名，必填项
+  -passwd string
+        Redis连接密码
   -port int
-    	服务端口 (default 8002)
+        服务端口 (default 8002)
   -ttl int
-    	短链接有效期，单位(天)，默认90天。 (default 90)
+        短链接有效期，单位(天)，默认90天。 (default 90)
 ```
 
 建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。

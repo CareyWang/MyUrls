@@ -1,7 +1,7 @@
 version: "3"
 services:
   myurls:
-    build: .
+    image: "careywong/myurls:latest"
     container_name: myurls
     restart: always
     env_file: .env

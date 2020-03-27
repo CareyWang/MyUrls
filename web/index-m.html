@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MyUrls</title>
+
+  <link rel="stylesheet" href="https://unpkg.com/element-ui@2.13.0/lib/theme-chalk/index.css">
+  <script src="https://unpkg.com/vue@2.6.11/dist/vue.min.js"></script>
+  <script src="https://unpkg.com/axios@0.19.2/dist/axios.min.js"></script>
+  <script src="https://unpkg.com/element-ui@2.13.0/lib/index.js"></script>
+</head>
+
+<body>
+  <div id="app">
+    <el-container>
+      <el-header></el-header>
+      <el-main>
+        <div class="body-center">
+          <img width="300" src="./logo.png">
+          <el-input ref="long" v-model="longUrl" size="medium" @keyup.enter.native="enterToDoShort">
+            <el-button slot="append" icon="el-icon-magic-stick" @click="doShort" :disabled="longUrl === ''"
+              :loading="loading"></el-button>
+          </el-input>
+          <el-input v-model="shortUrl" size="medium" disabled v-if="shortUrl !== ''"></el-input>
+        </div>
+      </el-main>
+    </el-container>
+  </div>
+
+  <script>
+    const backend = 'http://example.com'
+
+    let app = new Vue({
+      el: "#app",
+      data() {
+        return {
+          loading: false,
+          longUrl: '',
+          shortUrl: ''
+        }
+      },
+      mounted() {
+        this.$refs.long.focus()
+      },
+      methods: {
+        enterToDoShort(ev) {
+          ev.keyCode === 13 && this.doShort()
+        },
+        doShort() {
+          this.loading = true
+
+          let data = new FormData();
+          data.append("longUrl", btoa(this.longUrl));
+          axios.post(backend + '/short', data, {
+            header: {
+              "Content-Type": "application/form-data; charset=utf-8"
+            }
+          })
+            .then(res => {
+              if (res.data.Code === 1 && res.data.ShortUrl !== "") {
+                this.shortUrl = res.data.ShortUrl;
+              } else {
+                this.$message.error("短链接获取失败：" + res.data.Message);
+              }
+            })
+            .catch(() => {
+              this.$message.error("短链接获取失败");
+            })
+            .finally(() => {
+              this.loading = false;
+            });
+        }
+      },
+    })
+  </script>
+
+  <style>
+    .body-center {
+      width: 90%;
+      position: absolute;
+      left: 50%;
+      top: 30%;
+      transform: translate(-50%, -50%);
+      text-align: center;
+    }
+
+    .el-input {
+      margin-top: 20px;
+    }
+  </style>
+</body>
+
+</html>

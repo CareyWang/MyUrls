@@ -18,7 +18,7 @@
       <el-header></el-header>
       <el-main>
         <div class="body-center">
-          <img width="300" src="./logo.png">
+          <img width="300" src="./logo.png" @click="goToGayHub">
           <el-input ref="long" v-model="longUrl" size="medium" @keyup.enter.native="enterToDoShort">
             <el-button slot="append" icon="el-icon-magic-stick" @click="doShort" :disabled="longUrl === ''"
               :loading="loading"></el-button>
@@ -30,6 +30,7 @@
   </div>
 
   <script>
+    const repo = 'https://github.com/CareyWang/MyUrls'
     const backend = 'http://example.com'
 
     let app = new Vue({
@@ -71,6 +72,9 @@
             .finally(() => {
               this.loading = false;
             });
+        },
+        goToGayHub() {
+          window.open(repo)
         }
       },
     })
@@ -78,10 +82,10 @@
 
   <style>
     .body-center {
-      width: 90%;
+      width: 40%;
       position: absolute;
       left: 50%;
-      top: 30%;
+      top: 40%;
       transform: translate(-50%, -50%);
       text-align: center;
     }

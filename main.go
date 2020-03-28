@@ -153,8 +153,8 @@ func longToShort(longUrl string, ttl int) string {
 	for i := 0; i < 3; i++ {
 		shortKey = generate(6)
 
-		_existsLongUrl, _ := redis.String(redisClient.Do("get", longUrl))
-		if _existsLongUrl != "" {
+		_existsLongUrl, _ := redis.String(redisClient.Do("get", shortKey))
+		if _existsLongUrl == "" {
 			break
 		}
 	}

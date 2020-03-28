@@ -50,6 +50,12 @@
           ev.keyCode === 13 && this.doShort()
         },
         doShort() {
+          let re = new RegExp('http(s*)://[^\s]*')
+          if (re.exec(this.longUrl) === null) {
+            this.$message.warning('请输入正确格式的长链接')
+            return 
+          }
+
           this.loading = true
 
           let data = new FormData();

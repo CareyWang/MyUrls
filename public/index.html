@@ -19,7 +19,7 @@
       <el-header></el-header>
       <el-main>
         <div :class="[isPc ? 'body-center body-width-pc' : 'body-center body-width-mb']">
-          <img width="300" src="./logo.png" @click="goToGayHub">
+          <img width="300" src="https://cdn.jsdelivr.net/gh/CareyWang/MyUrls@master/public/logo.png" @click="goToGayHub">
           <el-input ref="long" v-model="longUrl" size="medium" @keyup.enter.native="enterToDoShort">
             <el-button slot="append" icon="el-icon-magic-stick" @click="doShort" :loading="loading"></el-button>
           </el-input>

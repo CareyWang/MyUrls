@@ -42,6 +42,7 @@ var redisClient redis.Conn
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+	router.LoadHTMLGlob("public/*.html")
 
 	port := flag.Int("port", defaultPort, "服务端口")
 	domain := flag.String("domain", "", "短链接域名，必填项")
@@ -66,6 +67,12 @@ func main() {
 		handleTimeout:  30,
 	}
 	initRedisPool()
+
+	router.GET("/", func(context *gin.Context) {
+		context.HTML(http.StatusOK, "index.html", gin.H{
+			"title": "MyUrls",
+		})
+	})
 
 	router.POST("/short", func(context *gin.Context) {
 		res := &Response{

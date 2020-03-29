@@ -1,4 +1,4 @@
-# bitly
+# MyUrls
 
 基于 golang1.13 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
 
@@ -13,6 +13,14 @@
 - [Maintainers](#maintainers)
 - [Contributing](#contributing)
 - [License](#license)
+
+# Update
+
+- 20200330
+  集成前端至根路径，如: <http://127.0.0.1:8002/>。
+
+  > 注：如需使用集成的前端，项目部署请 clone 仓库后自行编译，并在代码根目录启动服务。或者可 nginx 单独配置 root 至 public 目录的 index.html。
+
 
 # Dependencies
 

@@ -30,11 +30,6 @@ type redisPoolConf struct {
 }
 
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-const (
-	letterIdxBits = 6                    // 6 bits to represent a letter index
-	letterIdxMask = 1<<letterIdxBits - 1 // All 1-bits, as many as letterIdxBits
-	letterIdxMax  = 63 / letterIdxBits   // # of letter indices fitting in 63 bits
-)
 
 const defaultPort int = 8002
 const defaultExpire = 90
@@ -173,19 +168,10 @@ func longToShort(longUrl string, ttl int) string {
 func generate(bits int) string {
 	b := make([]byte, bits)
 
-	// A rand.Int63() generates 63 random bits, enough for letterIdxMax letters!
-	for i, cache, remain := bits-1, rand.Int63(), letterIdxMax; i >= 0; {
-		if remain == 0 {
-			cache, remain = rand.Int63(), letterIdxMax
-		}
-		if idx := int(cache & letterIdxMask); idx < len(letterBytes) {
-			b[i] = letterBytes[idx]
-			i--
-		}
-		cache >>= letterIdxBits
-		remain--
+	currentTime := time.Now().Unix()
+	for i := range b {
+		b[i] = letterBytes[(currentTime + rand.Int63()) % int64(len(letterBytes))]
 	}
-
 	return string(b)
 }
 

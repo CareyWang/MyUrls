@@ -164,13 +164,15 @@ func longToShort(longUrl string, ttl int) string {
 	return shortKey
 }
 
-// 产生一个63位随机整数，除以字符数取余获取对应字符
+// 产生一个63位随机整数
 func generate(bits int) string {
 	b := make([]byte, bits)
 
-	currentTime := time.Now().Unix()
+	currentTime := time.Now().UnixNano()
+	rand.Seed(currentTime)
+
 	for i := range b {
-		b[i] = letterBytes[(currentTime + rand.Int63()) % int64(len(letterBytes))]
+		b[i] = letterBytes[rand.Intn(len(letterBytes))]
 	}
 	return string(b)
 }

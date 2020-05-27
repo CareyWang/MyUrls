@@ -35,6 +35,11 @@ const defaultPort int = 8002
 const defaultExpire = 90
 const defaultRedisConfig = "127.0.0.1:6379"
 
+const defaultLockPrefix = "myurls:lock:"
+const defaultRenewal = 1
+
+const secondsPerDay = 24 * 3600
+
 var redisPool *redis.Pool
 var redisPoolConfig *redisPoolConf
 var redisClient redis.Conn
@@ -83,6 +88,7 @@ func main() {
 		}
 
 		longUrl := context.PostForm("longUrl")
+		shortKey := context.PostForm("shortKey")
 		if longUrl == "" {
 			res.Message = "longUrl为空"
 			context.JSON(400, *res)
@@ -91,18 +97,26 @@ func main() {
 
 		_longUrl, _ := base64.StdEncoding.DecodeString(longUrl)
 		longUrl = string(_longUrl)
-
-		shortKey := longToShort(longUrl, *ttl*24*3600)
-		if shortKey == "" {
-			res.Code = 0
-			res.Message = "短链接生成失败"
-			context.JSON(500, *res)
-			return
-		}
-
-		log.Println(longUrl, shortKey)
-
 		res.LongUrl = longUrl
+
+		// 根据有没有填写 short key，分别执行
+		if shortKey != "" {
+			redisClient := redisPool.Get()
+
+			// 检测短链是否已存在
+			_exists, _ := redis.String(redisClient.Do("get", shortKey))
+			if _exists != "" && _exists != longUrl {
+				res.Message = "短链接已存在，请更换key"
+				context.JSON(400, *res)
+				return
+			}
+
+			// 存储
+			_, _ = redisClient.Do("set", shortKey, longUrl)
+
+		} else {
+			shortKey = longToShort(longUrl, *ttl*secondsPerDay)
+		}
 
 		protocol := "http://"
 		if *https != 0 {
@@ -110,6 +124,7 @@ func main() {
 		}
 		res.ShortUrl = protocol + *domain + "/" + shortKey
 
+		context.Header("Access-Control-Allow-Origin", "*")
 		context.JSON(200, *res)
 	})
 
@@ -133,6 +148,12 @@ func shortToLong(shortKey string) string {
 	defer redisClient.Close()
 
 	longUrl, _ := redis.String(redisClient.Do("get", shortKey))
+
+	// 获取到长链接后，续命1天。每天仅允许续命1次。
+	if longUrl != "" {
+		renew(shortKey)
+	}
+
 	return longUrl
 }
 
@@ -153,7 +174,7 @@ func longToShort(longUrl string, ttl int) string {
 	// 重试三次
 	var shortKey string
 	for i := 0; i < 3; i++ {
-		shortKey = generate(6)
+		shortKey = generate(7)
 
 		_existsLongUrl, _ := redis.String(redisClient.Do("get", shortKey))
 		if _existsLongUrl == "" {
@@ -165,7 +186,7 @@ func longToShort(longUrl string, ttl int) string {
 		_, _ = redisClient.Do("mset", shortKey, longUrl, longUrl, shortKey)
 
 		_, _ = redisClient.Do("expire", shortKey, ttl)
-		_, _ = redisClient.Do("expire", longUrl, ttl)
+		_, _ = redisClient.Do("expire", longUrl, secondsPerDay)
 	}
 
 	return shortKey
@@ -203,5 +224,22 @@ func initRedisPool() {
 			}
 			return con, nil
 		},
+	}
+}
+
+func renew(shortKey string) {
+	redisClient = redisPool.Get()
+	defer redisClient.Close()
+
+	// 加锁
+	lockKey := defaultLockPrefix + shortKey
+	lock, _ := redis.Int(redisClient.Do("setnx", lockKey, 1))
+	if lock == 1 {
+		// 设置锁过期时间
+		_, _ = redisClient.Do("expire", lockKey, defaultRenewal*secondsPerDay)
+
+		// 续命
+		ttl, _ := redis.Int(redisClient.Do("ttl", shortKey))
+		_, _ = redisClient.Do("expire", shortKey, ttl+defaultRenewal*secondsPerDay)
 	}
 }

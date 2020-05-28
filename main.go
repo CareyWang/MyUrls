@@ -124,7 +124,7 @@ func main() {
 		}
 		res.ShortUrl = protocol + *domain + "/" + shortKey
 
-		context.Header("Access-Control-Allow-Origin", "*")
+		// context.Header("Access-Control-Allow-Origin", "*")
 		context.JSON(200, *res)
 	})
 

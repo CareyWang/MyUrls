@@ -90,8 +90,9 @@ func main() {
 		longUrl := context.PostForm("longUrl")
 		shortKey := context.PostForm("shortKey")
 		if longUrl == "" {
+			res.Code = 0
 			res.Message = "longUrl为空"
-			context.JSON(400, *res)
+			context.JSON(200, *res)
 			return
 		}
 
@@ -106,8 +107,9 @@ func main() {
 			// 检测短链是否已存在
 			_exists, _ := redis.String(redisClient.Do("get", shortKey))
 			if _exists != "" && _exists != longUrl {
+				res.Code = 0
 				res.Message = "短链接已存在，请更换key"
-				context.JSON(400, *res)
+				context.JSON(200, *res)
 				return
 			}
 

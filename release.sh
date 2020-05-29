@@ -10,4 +10,3 @@ tar -czvf linux-amd64.tar.gz myurls
 mv linux-amd64.tar.gz build/
 
 rm -rf myurls
-

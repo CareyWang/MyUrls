@@ -22,5 +22,5 @@ jobs:
       - name: Upload
         uses: actions/upload-artifact@v1
         with:
-          name: myurls-linux-amd64.tar.gz
+          name: myurls-linux-amd64
           path: build/linux-amd64.tar.gz

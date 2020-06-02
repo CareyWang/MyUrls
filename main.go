@@ -242,6 +242,8 @@ func renew(shortKey string) {
 
 		// 续命
 		ttl, _ := redis.Int(redisClient.Do("ttl", shortKey))
-		_, _ = redisClient.Do("expire", shortKey, ttl+defaultRenewal*secondsPerDay)
+		if ttl != -1 {
+			_, _ = redisClient.Do("expire", shortKey, ttl+defaultRenewal*secondsPerDay)
+		}
 	}
 }

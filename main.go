@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"github.com/gin-gonic/gin"
 	"github.com/gomodule/redigo/redis"
+	"github.com/sirupsen/logrus"
 	"log"
 	"math/rand"
 	"net/http"
+	"os"
+	"path"
 	"time"
 )
 
@@ -47,6 +50,10 @@ var redisClient redis.Conn
 func main() {
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
+
+	// Log 收集中间件
+	router.Use(LoggerToFile())
+
 	router.LoadHTMLGlob("public/*.html")
 
 	port := flag.Int("port", defaultPort, "服务端口")
@@ -142,6 +149,98 @@ func main() {
 	})
 
 	router.Run(fmt.Sprintf(":%d", *port))
+}
+
+func Logger() *logrus.Logger {
+	now := time.Now()
+	logFilePath := ""
+	if dir, err := os.Getwd(); err == nil {
+		logFilePath = dir + "/logs/"
+	}
+	if err := os.MkdirAll(logFilePath, 0777); err != nil {
+		fmt.Println(err.Error())
+	}
+	logFileName := now.Format("2006-01-02") + ".log"
+
+	//日志文件
+	fileName := path.Join(logFilePath, logFileName)
+	if _, err := os.Stat(fileName); err != nil {
+		if _, err := os.Create(fileName); err != nil {
+			fmt.Println(err.Error())
+		}
+	}
+
+	//写入文件
+	src, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		fmt.Println("err", err)
+	}
+
+	//实例化
+	logger := logrus.New()
+
+	//设置输出
+	logger.SetOutput(src)
+	// logger.Out = src
+
+	//设置日志级别
+	logger.SetLevel(logrus.DebugLevel)
+
+	//设置日志格式
+	logger.Formatter = &logrus.JSONFormatter{}
+
+	return logger
+}
+
+func LoggerToFile() gin.HandlerFunc {
+	logger := Logger()
+	return func(c *gin.Context) {
+		logMap := make(map[string]interface{})
+
+		// 开始时间
+		startTime := time.Now()
+		logMap["startTime"] = startTime.Format("2006-01-02 15:04:05")
+
+		// 处理请求
+		c.Next()
+
+		// 结束时间
+		endTime := time.Now()
+		logMap["endTime"] = endTime.Format("2006-01-02 15:04:05")
+
+		// 执行时间
+		logMap["latencyTime"] = endTime.Sub(startTime).Microseconds()
+
+		// 请求方式
+		logMap["reqMethod"] = c.Request.Method
+
+		// 请求路由
+		logMap["reqUri"] = c.Request.RequestURI
+
+		// 状态码
+		logMap["statusCode"] = c.Writer.Status()
+
+		// 请求IP
+		logMap["clientIP"] = c.ClientIP()
+
+		// 请求 UA
+		logMap["clientUA"] = c.Request.UserAgent()
+
+		//日志格式
+		// logJson, _ := json.Marshal(logMap)
+		// logger.Info(string(logJson))
+
+		logger.WithFields(logrus.Fields{
+			"startTime": logMap["startTime"],
+			"endTime": logMap["endTime"],
+			"latencyTime": logMap["latencyTime"],
+			"reqMethod": logMap["reqMethod"],
+			"reqUri": logMap["reqUri"],
+			"statusCode": logMap["statusCode"],
+			"clientIP": logMap["clientIP"],
+			"clientUA": logMap["clientUA"],
+		}).Info()
+	}
 }
 
 // 短链接转长链接

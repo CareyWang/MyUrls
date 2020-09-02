@@ -152,7 +152,6 @@ func main() {
 }
 
 func Logger() *logrus.Logger {
-	now := time.Now()
 	logFilePath := ""
 	if dir, err := os.Getwd(); err == nil {
 		logFilePath = dir + "/logs/"

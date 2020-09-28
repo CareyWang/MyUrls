@@ -73,10 +73,21 @@ docker-compose up -d
 make install
 ```
 
-生成可执行文件，目录位于 build/ 。默认当前平台，其他平台请参照 Makefile 或执行对应 go build 命令。
+生成可执行文件，目录位于 build/ ，默认当前平台。
 
 ```shell script
 make
+```
+
+其他平台交叉编译
+
+```shell script
+# Run these command no matter what platform you are using
+go env -w GO111MODULE="on" && go env -w GOPROXY="https://goproxy.cn,direct"
+go mod tidy 
+
+# Cross-compiling by change the value of "GOOS" and "GOARCH"
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o myurls main.go 
 ```
 
 ## 使用
@@ -118,7 +129,7 @@ pm2 start myurls.service --watch --name myurls -- -domain example.com
 
 接受PR
 
-小提示：如果编辑自述文件，请遵循[standard-readme]（https://github.com/RichardLitt/standard-readme）规范。
+小提示：如果编辑自述文件，请遵循[standard-readme]（https://github.com/RichardLitt/standard-readme)规范。
 
 💖 特别感谢 **Fanyang Meng** [@MFYDev](https://github.com/MFYDev)的贡献。
 

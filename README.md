@@ -1,6 +1,14 @@
 # MyUrls
 
-基于 golang1.13 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
+![GitHub release (latest by date)](https://img.shields.io/github/v/release/careywang/myurls)
+![golang version](https://img.shields.io/badge/Golang-1.13-brightgreen)
+![GitHub commits since latest release (by date)](https://img.shields.io/github/commits-since/careywang/myurls/latest/master)
+![GitHub last commit](https://img.shields.io/github/last-commit/careywang/myurls)
+![GitHub contributors](https://img.shields.io/github/contributors/careywang/myurls)
+
+Local short link service based on Golang 1.13 and Redis for shortening request link and short link restoration.
+
+[中文文档](/README-CN.md)
 
 ## Table of Contents
 
@@ -17,22 +25,24 @@
 # Update
 
 - 20200928
-  编译arm64架构二进制文件并加入release，现在你可以在树莓派以及其他arm64架构的平台上使用它。
+
+  Compile the ARM64 architecture binary and add it to the Release, which you can now use on raspberry PI and other ARM64 architecture platforms.
   
 - 20200330
-  集成前端至根路径，如: <http://127.0.0.1:8002/>。
 
-  > 注：如需使用集成的前端，项目部署请 clone 仓库后自行编译，并在代码根目录启动服务。或者可 nginx 单独配置 root 至 public 目录的 index.html。
+  Integrate the front end to the root path, such as: <http://127.0.0.1:8002/>。
+
+  > Note: To use an integrated front end, clone the repository for project deployment and start the service in the root directory or nginx can configure index.html from root to public separately
 
 
 # Dependencies
 
-本服务依赖于 Redis 提供长短链接映射关系存储，你需要本地安装 Redis 服务来保证短链接服务的正常运行。
+This service relies on Redis to provide long and short link mapping relational storage. You need to install the Redis service locally to keep the short link service running.
 
 ```shell script
 sudo apt-get update
 
-# 安装Redis
+# Install Redis
 sudo add-apt-repository ppa:chris-lea/redis-server -y 
 sudo apt-get update 
 sudo apt-get install redis-server -y 
@@ -40,7 +50,9 @@ sudo apt-get install redis-server -y
 
 ## Docker 
 
-现在你可以无需安装其他服务，使用 docker 或 [docker-compose](https://docs.docker.com/compose/install/) 部署本项目。注：请自行修改 .env 中参数。
+Now you can use docker or [docker-compose](https://docs.docker.com/compose/install/) to deploy this project without installing other services. 
+
+Note: Please modify the parameters in .env by yourself.
 
 ```
 docker run -d --restart always --name myurls careywong/myurls:latest -domain example.com -port 8002 -conn 127.0.0.1:6379 -passwd '' -ttl 90
@@ -57,39 +69,49 @@ docker-compose up -d
 
 ## Install
 
-安装项目依赖
+Installation project dependencies
 
 ```shell script
 make install
 ```
 
-生成可执行文件，目录位于 build/ 。默认当前平台，其他平台请参照 Makefile 或执行对应 go build 命令。
+Generate executable files, the directory is located in build/. The current platform is the default. For other platforms, cross-compiling will be covered in the following part.
 
 ```shell script
 make
 ```
+Cross-compiling
+
+```shell script
+# Run these command no matter what platform you are using
+go env -w GO111MODULE="on" && go env -w GOPROXY="https://goproxy.cn,direct"
+go mod tidy 
+
+# Cross-compiling by change the value of "GOOS" and "GOARCH"
+CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o myurls main.go 
+```
 
 ## Usage
 
-前往 [Release](https://github.com/CareyWang/MyUrls/releases) 下载对应平台可执行文件。
+Go to [Release](https://github.com/CareyWang/MyUrls/releases) to download the corresponding platform executable file.
 
 ```shell script
 ./build/linux-amd64-myurls.service -h 
 
 Usage of ./build/linux-amd64-myurls.service:
   -conn string
-        Redis连接，格式: host:port (default "127.0.0.1:6379")
+        Redis connection, format: host:port (default "127.0.0.1:6379")
   -domain string
-        短链接域名，必填项
+        Short link domain name, required
   -passwd string
-        Redis连接密码
+        Redis connection password
   -port int
-        服务端口 (default 8002)
+        Service port (default 8002)
   -ttl int
-        短链接有效期，单位(天)，默认90天。 (default 90)
+        Short link validity, unit (days) (default 90)
 ```
 
-建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。
+It is recommended to start the daemon with [pm2](https://pm2.keymetrics.io/).
 
 ```shell script
 pm2 start myurls.service --watch --name myurls -- -domain example.com
@@ -97,7 +119,7 @@ pm2 start myurls.service --watch --name myurls -- -domain example.com
 
 ## API
 
-[参考文档](https://myurls.mydoc.li)
+[Reference](https://myurls.mydoc.li)
 
 
 ## Maintainers
@@ -110,7 +132,7 @@ PRs accepted.
 
 Small note: If editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
 
-Special Thanks to [@MFYDev](https://github.com/MFYDev)
+💖 Special Thanks to **FanyangMeng** [@MFYDev](https://github.com/MFYDev) for his contributing.
 
 ## License
 

@@ -20,7 +20,7 @@ all:
 	@echo ${BINARY_WINDOWS}
 	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ${BINARY_WINDOWS} ${GOFILES}
 	@echo ${BINARY_ARRCH64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=aarch64 go build -o ${BINARY_ARRCH64} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ${BINARY_ARRCH64} ${GOFILES}
 
 linux:
 	@echo ${BINARY_LINUX}
@@ -36,7 +36,7 @@ windows:
 
 aarch64:
 	@echo ${BINARY_ARRCH64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=aarch64 go build -o ${BINARY_ARRCH64} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o ${BINARY_ARRCH64} ${GOFILES}
 
 install:
 	@go mod tidy

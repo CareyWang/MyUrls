@@ -16,6 +16,9 @@
 
 # Update
 
+- 20200928
+  编译arm64架构二进制文件并加入release，现在你可以在树莓派以及其他arm64架构的平台上使用它。
+  
 - 20200330
   集成前端至根路径，如: <http://127.0.0.1:8002/>。
 
@@ -106,6 +109,8 @@ pm2 start myurls.service --watch --name myurls -- -domain example.com
 PRs accepted.
 
 Small note: If editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
+
+Special Thanks to [@MFYDev](https://github.com/MFYDev)
 
 ## License
 

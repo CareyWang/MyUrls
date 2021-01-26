@@ -7,13 +7,17 @@ services:
     env_file: .env
     ports:
       - "${MYURLS_PORT}:8002"
+    volumes:
+      - ./data/myurls/logs:/app/logs      
     depends_on:
-      - redis
+      - myurls-redis
     entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", redis:6379, "-ttl", "${MYURLS_TTL}"]
 
-  redis:
+  myurls-redis:
     image: "redis:5"
-    container_name: redis
+    container_name: myurls-redis
     restart: always
+    volumes:
+      - ./data/redis:/data
     expose:
       - "6379"

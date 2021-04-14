@@ -11,7 +11,7 @@ services:
       - ./data/myurls/logs:/app/logs      
     depends_on:
       - myurls-redis
-    entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", redis:6379, "-ttl", "${MYURLS_TTL}"]
+    entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", myurls-redis:6379, "-ttl", "${MYURLS_TTL}"]
 
   myurls-redis:
     image: "redis:5"

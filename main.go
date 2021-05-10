@@ -4,15 +4,16 @@ import (
 	"encoding/base64"
 	"flag"
 	"fmt"
-	"github.com/gin-gonic/gin"
-	"github.com/gomodule/redigo/redis"
-	"github.com/sirupsen/logrus"
 	"log"
 	"math/rand"
 	"net/http"
 	"os"
 	"path"
 	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/gomodule/redigo/redis"
+	"github.com/sirupsen/logrus"
 )
 
 type Response struct {
@@ -35,7 +36,7 @@ type redisPoolConf struct {
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
 const defaultPort int = 8002
-const defaultExpire = 90
+const defaultExpire = 180
 const defaultRedisConfig = "127.0.0.1:6379"
 
 const defaultLockPrefix = "myurls:lock:"
@@ -58,7 +59,7 @@ func main() {
 
 	port := flag.Int("port", defaultPort, "服务端口")
 	domain := flag.String("domain", "", "短链接域名，必填项")
-	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认90天。")
+	ttl := flag.Int("ttl", defaultExpire, "短链接有效期，单位(天)，默认180天。")
 	conn := flag.String("conn", defaultRedisConfig, "Redis连接，格式: host:port")
 	passwd := flag.String("passwd", "", "Redis连接密码")
 	https := flag.Int("https", 1, "是否返回 https 短链接")
@@ -151,97 +152,6 @@ func main() {
 	router.Run(fmt.Sprintf(":%d", *port))
 }
 
-func Logger() *logrus.Logger {
-	logFilePath := ""
-	if dir, err := os.Getwd(); err == nil {
-		logFilePath = dir + "/logs/"
-	}
-	if err := os.MkdirAll(logFilePath, 0777); err != nil {
-		fmt.Println(err.Error())
-	}
-	logFileName := "access.log"
-
-	//日志文件
-	fileName := path.Join(logFilePath, logFileName)
-	if _, err := os.Stat(fileName); err != nil {
-		if _, err := os.Create(fileName); err != nil {
-			fmt.Println(err.Error())
-		}
-	}
-
-	//写入文件
-	src, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
-	if err != nil {
-		fmt.Println("err", err)
-	}
-
-	//实例化
-	logger := logrus.New()
-
-	//设置输出
-	logger.SetOutput(src)
-	// logger.Out = src
-
-	//设置日志级别
-	logger.SetLevel(logrus.DebugLevel)
-
-	//设置日志格式
-	logger.Formatter = &logrus.JSONFormatter{}
-
-	return logger
-}
-
-func LoggerToFile() gin.HandlerFunc {
-	logger := Logger()
-	return func(c *gin.Context) {
-		logMap := make(map[string]interface{})
-
-		// 开始时间
-		startTime := time.Now()
-		logMap["startTime"] = startTime.Format("2006-01-02 15:04:05")
-
-		// 处理请求
-		c.Next()
-
-		// 结束时间
-		endTime := time.Now()
-		logMap["endTime"] = endTime.Format("2006-01-02 15:04:05")
-
-		// 执行时间
-		logMap["latencyTime"] = endTime.Sub(startTime).Microseconds()
-
-		// 请求方式
-		logMap["reqMethod"] = c.Request.Method
-
-		// 请求路由
-		logMap["reqUri"] = c.Request.RequestURI
-
-		// 状态码
-		logMap["statusCode"] = c.Writer.Status()
-
-		// 请求IP
-		logMap["clientIP"] = c.ClientIP()
-
-		// 请求 UA
-		logMap["clientUA"] = c.Request.UserAgent()
-
-		//日志格式
-		// logJson, _ := json.Marshal(logMap)
-		// logger.Info(string(logJson))
-
-		logger.WithFields(logrus.Fields{
-			"startTime": logMap["startTime"],
-			"endTime": logMap["endTime"],
-			"latencyTime": logMap["latencyTime"],
-			"reqMethod": logMap["reqMethod"],
-			"reqUri": logMap["reqUri"],
-			"statusCode": logMap["statusCode"],
-			"clientIP": logMap["clientIP"],
-			"clientUA": logMap["clientUA"],
-		}).Info()
-	}
-}
-
 // 短链接转长链接
 func shortToLong(shortKey string) string {
 	redisClient = redisPool.Get()
@@ -292,6 +202,26 @@ func longToShort(longUrl string, ttl int) string {
 	return shortKey
 }
 
+// 续命
+func renew(shortKey string) {
+	redisClient = redisPool.Get()
+	defer redisClient.Close()
+
+	// 加锁
+	lockKey := defaultLockPrefix + shortKey
+	lock, _ := redis.Int(redisClient.Do("setnx", lockKey, 1))
+	if lock == 1 {
+		// 设置锁过期时间
+		_, _ = redisClient.Do("expire", lockKey, defaultRenewal*secondsPerDay)
+
+		// 续命
+		ttl, _ := redis.Int(redisClient.Do("ttl", shortKey))
+		if ttl != -1 {
+			_, _ = redisClient.Do("expire", shortKey, ttl+defaultRenewal*secondsPerDay)
+		}
+	}
+}
+
 // 产生一个63位随机整数
 func generate(bits int) string {
 	b := make([]byte, bits)
@@ -305,6 +235,100 @@ func generate(bits int) string {
 	return string(b)
 }
 
+// 定义 logger
+func Logger() *logrus.Logger {
+	logFilePath := ""
+	if dir, err := os.Getwd(); err == nil {
+		logFilePath = dir + "/logs/"
+	}
+	if err := os.MkdirAll(logFilePath, 0777); err != nil {
+		fmt.Println(err.Error())
+	}
+	logFileName := "access.log"
+
+	//日志文件
+	fileName := path.Join(logFilePath, logFileName)
+	if _, err := os.Stat(fileName); err != nil {
+		if _, err := os.Create(fileName); err != nil {
+			fmt.Println(err.Error())
+		}
+	}
+
+	//写入文件
+	src, err := os.OpenFile(fileName, os.O_APPEND|os.O_WRONLY, os.ModeAppend)
+	if err != nil {
+		fmt.Println("err", err)
+	}
+
+	//实例化
+	logger := logrus.New()
+
+	//设置输出
+	logger.SetOutput(src)
+	// logger.Out = src
+
+	//设置日志级别
+	logger.SetLevel(logrus.DebugLevel)
+
+	//设置日志格式
+	logger.Formatter = &logrus.JSONFormatter{}
+
+	return logger
+}
+
+// 文件日志
+func LoggerToFile() gin.HandlerFunc {
+	logger := Logger()
+	return func(c *gin.Context) {
+		logMap := make(map[string]interface{})
+
+		// 开始时间
+		startTime := time.Now()
+		logMap["startTime"] = startTime.Format("2006-01-02 15:04:05")
+
+		// 处理请求
+		c.Next()
+
+		// 结束时间
+		endTime := time.Now()
+		logMap["endTime"] = endTime.Format("2006-01-02 15:04:05")
+
+		// 执行时间
+		logMap["latencyTime"] = endTime.Sub(startTime).Microseconds()
+
+		// 请求方式
+		logMap["reqMethod"] = c.Request.Method
+
+		// 请求路由
+		logMap["reqUri"] = c.Request.RequestURI
+
+		// 状态码
+		logMap["statusCode"] = c.Writer.Status()
+
+		// 请求IP
+		logMap["clientIP"] = c.ClientIP()
+
+		// 请求 UA
+		logMap["clientUA"] = c.Request.UserAgent()
+
+		//日志格式
+		// logJson, _ := json.Marshal(logMap)
+		// logger.Info(string(logJson))
+
+		logger.WithFields(logrus.Fields{
+			"startTime":   logMap["startTime"],
+			"endTime":     logMap["endTime"],
+			"latencyTime": logMap["latencyTime"],
+			"reqMethod":   logMap["reqMethod"],
+			"reqUri":      logMap["reqUri"],
+			"statusCode":  logMap["statusCode"],
+			"clientIP":    logMap["clientIP"],
+			"clientUA":    logMap["clientUA"],
+		}).Info()
+	}
+}
+
+// redis 连接池
 func initRedisPool() {
 	// 建立连接池
 	redisPool = &redis.Pool{
@@ -324,24 +348,5 @@ func initRedisPool() {
 			}
 			return con, nil
 		},
-	}
-}
-
-func renew(shortKey string) {
-	redisClient = redisPool.Get()
-	defer redisClient.Close()
-
-	// 加锁
-	lockKey := defaultLockPrefix + shortKey
-	lock, _ := redis.Int(redisClient.Do("setnx", lockKey, 1))
-	if lock == 1 {
-		// 设置锁过期时间
-		_, _ = redisClient.Do("expire", lockKey, defaultRenewal*secondsPerDay)
-
-		// 续命
-		ttl, _ := redis.Int(redisClient.Do("ttl", shortKey))
-		if ttl != -1 {
-			_, _ = redisClient.Do("expire", shortKey, ttl+defaultRenewal*secondsPerDay)
-		}
 	}
 }

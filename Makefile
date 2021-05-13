@@ -1,8 +1,8 @@
 BINARY_DEFAULT="build/myurls"
-BINARY_LINUX="build/linux-amd64-myurls"
-BINARY_DARWIN="build/darwin-amd64-myurls"
-BINARY_WINDOWS="build/windows-x64-myurls"
-BINARY_ARRCH64="build/arrch64-myurls"
+BINARY_LINUX="build/myurls-linux-amd64"
+BINARY_DARWIN="build/myurls-darwin-amd64"
+BINARY_WINDOWS="build/myurls-windows-x64"
+BINARY_ARRCH64="build/myurls-arrch64"
 
 GOFILES="main.go"
 VERSION=1.0.0

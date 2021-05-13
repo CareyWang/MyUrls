@@ -7,31 +7,31 @@ mkdir -p myurls
 cp -r public myurls/
 
 # linux-amd64
-cp build/linux-amd64-myurls myurls/
-tar -czvf linux-amd64-myurls.tar.gz myurls
-mv linux-amd64-myurls.tar.gz build/
-rm build/linux-amd64-myurls
+cp build/myurls-linux-amd64 myurls/
+tar -czvf myurls-linux-amd64.tar.gz myurls
+mv myurls-linux-amd64.tar.gz build/
+rm build/myurls-linux-amd64
 rm -rf myurls/*
 
 # arrch64
-cp build/arrch64-myurls myurls/
-tar -czvf arrch64-myurls.tar.gz myurls
-mv arrch64-myurls.tar.gz build/
-rm build/arrch64-myurls
+cp build/myurls-arrch64 myurls/
+tar -czvf myurls-arrch64.tar.gz myurls
+mv myurls-arrch64.tar.gz build/
+rm build/myurls-arrch64
 rm -rf myurls/*
 
 # darwin-amd64
-cp build/darwin-amd64-myurls myurls/
-tar -czvf darwin-amd64-myurls.tar.gz myurls
-mv darwin-amd64-myurls.tar.gz build/
-rm build/darwin-amd64-myurls
+cp build/myurls-darwin-amd64 myurls/
+tar -czvf myurls-darwin-amd64.tar.gz myurls
+mv myurls-darwin-amd64.tar.gz build/
+rm build/myurls-darwin-amd64
 rm -rf myurls/*
 
 # windows-x64
-cp build/windows-x64-myurls myurls/
-tar -czvf windows-x64-myurls.tar.gz myurls
-mv windows-x64-myurls.tar.gz build/
-rm build/windows-x64-myurls
+cp build/myurls-windows-x64 myurls/
+tar -czvf myurls-windows-x64.tar.gz myurls
+mv myurls-windows-x64.tar.gz build/
+rm build/myurls-windows-x64
 rm -rf myurls/*
 
 rm -rf myurls

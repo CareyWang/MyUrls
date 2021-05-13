@@ -1,6 +1,6 @@
 # MyUrls
 
-基于 golang1.13 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
+基于 golang1.15 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
 
 ## Table of Contents
 
@@ -63,7 +63,7 @@ make install
 生成可执行文件，目录位于 build/ 。默认当前平台，其他平台请参照 Makefile 或执行对应 go build 命令。
 
 ```shell script
-make
+bash release.sh
 ```
 
 ## Usage
@@ -71,9 +71,9 @@ make
 前往 [Release](https://github.com/CareyWang/MyUrls/releases) 下载对应平台可执行文件。
 
 ```shell script
-./build/linux-amd64-myurls.service -h 
+./build/linux-amd64-myurls -h 
 
-Usage of ./build/linux-amd64-myurls.service:
+Usage of ./build/linux-amd64-myurls:
   -conn string
         Redis连接，格式: host:port (default "127.0.0.1:6379")
   -domain string
@@ -83,13 +83,13 @@ Usage of ./build/linux-amd64-myurls.service:
   -port int
         服务端口 (default 8002)
   -ttl int
-        短链接有效期，单位(天)，默认90天。 (default 90)
+        短链接有效期，单位(天)，默认180天。 (default 180)
 ```
 
 建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。
 
 ```shell script
-pm2 start myurls.service --watch --name myurls -- -domain example.com
+pm2 start myurls --watch --name myurls -- -domain example.com
 ```
 
 ## API

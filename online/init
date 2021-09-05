@@ -1,0 +1,4 @@
+#!/bin/sh
+
+/myurls -port 8002 -domain $DOMAIN -conn $CONN -passwd PASSWD -ttl $TTL &
+nginx -g 'daemon off;'

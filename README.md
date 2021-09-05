@@ -51,6 +51,28 @@ cp .env.example .env
 
 docker-compose up -d
 ```
+## Cloud Deployment
+
+现在你可以无需使用服务器，在线部署本项目，下面以 [railway.app](https://railway.app/) 为示例进行说明。若使用 Heroku 需要自行修改代码中的端口配置。 
+
+
+### 参数说明
+
+- `DOMAIN` - 短链接域名，必填项
+- `CONN` - Redis连接，格式: host:port
+- `PASSWD` - Redis连接密码
+- `TTL` - 短链接有效期，单位(天)，默认180天。 (default 180)
+- `PORT` - 端口，请勿修改
+
+### 一键部署
+
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2FCareyWang%2FMyUrls%2Ftree%2Fmaster%2Fonline&plugins=redis&envs=DOMAIN%2CCONN%2CPASSWD%2CTTL%2CPORT&optionalEnvs=PASSWD%2CTTL&DOMAINDesc=Short+link+domain+name%2C+required&CONNDesc=Redis+connection%2C+format%3A+host%3Aport&PASSWDDesc=Redis+connection+password&TTLDesc=The+validity+period+of+the+short+link+%28days%29%2C+default+180+days.+%28default+180%29&PORTDesc=DO+NOT+Change&PORTDefault=80)
+
+### 其他说明
+
+在线部署采用非本地Redis服务，可在railway.app部署项目后，添加Redius插件获取，或在 https://redislabs.com/redis-cloud 申请免费的Redis数据库。
+
+若某些区域无法正常访问railway.app，可以通过 Cloudflare 配置CDN进行解决。
 
 ## Install
 

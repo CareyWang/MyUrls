@@ -66,7 +66,7 @@ docker-compose up -d
 
 ### 一键部署
 
-[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2FCareyWang%2FMyUrls%2Ftree%2Fmaster%2Fonline&plugins=redis&envs=DOMAIN%2CCONN%2CPASSWD%2CTTL%2CPORT&optionalEnvs=PASSWD%2CTTL&DOMAINDesc=Short+link+domain+name%2C+required&CONNDesc=Redis+connection%2C+format%3A+host%3Aport&PASSWDDesc=Redis+connection+password&TTLDesc=The+validity+period+of+the+short+link+%28days%29%2C+default+180+days.+%28default+180%29&PORTDesc=DO+NOT+Change&PORTDefault=80)
+[![Deploy on Railway](https://railway.app/button.svg)](https://railway.app/new/template?template=https%3A%2F%2Fgithub.com%2FCareyWang%2FMyUrls%2Ftree%2Fmaster%2FMyurls-Cloud&plugins=redis&envs=DOMAIN%2CCONN%2CPASSWD%2CTTL%2CPORT&optionalEnvs=PASSWD%2CTTL&DOMAINDesc=Short+link+domain+name%2C+required&CONNDesc=Redis+connection%2C+format%3A+host%3Aport&PASSWDDesc=Redis+connection+password&TTLDesc=The+validity+period+of+the+short+link+%28days%29%2C+default+180+days.+%28default+180%29&PORTDesc=DO+NOT+Change&PORTDefault=80)
 
 ### 其他说明
 

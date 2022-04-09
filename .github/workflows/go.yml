@@ -46,4 +46,4 @@ jobs:
         uses: actions/upload-artifact@v1
         with:
           name: myurls-linux-arm64
-          path: build/myurls-linux-arm64.tar.gz
+          path: build/myurls-arrch64.tar.gz

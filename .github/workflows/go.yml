@@ -6,14 +6,14 @@ on:
 
 jobs:
 
-  build:
-    name: Build
+  linux64_build:
+    name: Linux x86_64 Build
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.15
+      - name: Set up Go 1.18
         uses: actions/setup-go@v1
         with:
-          go-version: 1.15
+          go-version: 1.18
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@v2
@@ -26,3 +26,24 @@ jobs:
         with:
           name: myurls-linux-amd64
           path: build/myurls-linux-amd64.tar.gz
+          
+  aarch64_build:
+    name: Linux aarch64 Build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.18
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install gcc-aarch64-linux-gnu
+      - name: Build
+        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: myurls-linux-arm64
+          path: build/myurls-linux-arm64.tar.gz

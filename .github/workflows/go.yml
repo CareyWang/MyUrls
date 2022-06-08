@@ -2,13 +2,12 @@ name: Github CI
 
 on:
   push:
-    branches: [ master ]
+    branches: [master]
 
 jobs:
-
-  linux64_build:
-    name: Linux x86_64 Build
-    runs-on: ubuntu-latest
+  linux_amd64_build:
+    name: Linux amd64 build
+    runs-on: ubuntu-22.04
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -26,3 +25,63 @@ jobs:
         with:
           name: myurls-linux-amd64
           path: build/myurls-linux-amd64.tar.gz
+  linux_arm64_build:
+    name: Linux arm64 build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.18
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install gcc-aarch64-linux-gnu
+      - name: Build
+        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: myurls-linux-arm64
+          path: build/myurls-linux-arm64.tar.gz
+  darwin_amd64_build:
+    name: Windows X64 Build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.18
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install gcc-aarch64-linux-gnu
+      - name: Build
+        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: myurls-darwin-amd64.tar.gz
+          path: build/myurls-darwin-amd64.tar.gz
+  windows_x64_build:
+    name: Windows X64 Build
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Set up Go 1.18
+        uses: actions/setup-go@v1
+        with:
+          go-version: 1.18
+        id: go
+      - name: Check out code into the Go module directory
+        uses: actions/checkout@v2
+      - name: Install dependencies
+        run: sudo apt install gcc-aarch64-linux-gnu
+      - name: Build
+        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+      - name: Upload
+        uses: actions/upload-artifact@v1
+        with:
+          name: myurls-windows-x64.tar.gz
+          path: build/myurls-windows-x64.tar.gz

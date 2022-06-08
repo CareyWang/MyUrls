@@ -8,6 +8,7 @@ jobs:
   linux_amd64_build:
     name: Linux amd64 build
     runs-on: ubuntu-20.04
+    # runs-on: self-hosted
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -28,7 +29,8 @@ jobs:
 
   linux_arm64_build:
     name: Linux arm64 build
-    runs-on: ubuntu-20.04
+    # runs-on: ubuntu-20.04
+    runs-on: self-hosted
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1

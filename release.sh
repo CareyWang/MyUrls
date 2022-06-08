@@ -14,11 +14,11 @@ rm build/myurls-linux-amd64
 rm -rf myurls/*
 
 # arm64
-cp build/myurls-arm64 myurls/
+cp build/myurls-linux-arm64 myurls/
 cp -r public myurls/
-tar -czvf myurls-arm64.tar.gz myurls
-mv myurls-arm64.tar.gz build/
-rm build/myurls-arm64
+tar -czvf myurls-linux-arm64.tar.gz myurls
+mv myurls-linux-arm64.tar.gz build/
+rm build/myurls-linux-arm64
 rm -rf myurls/*
 
 # darwin-amd64

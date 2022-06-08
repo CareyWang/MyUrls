@@ -46,7 +46,7 @@ jobs:
           name: myurls-linux-arm64
           path: build/myurls-linux-arm64.tar.gz
   darwin_amd64_build:
-    name: Windows X64 Build
+    name: Darwin amd64 Build
     runs-on: ubuntu-22.04
     steps:
       - name: Set up Go 1.18

@@ -7,7 +7,7 @@ on:
 jobs:
   linux_amd64_build:
     name: Linux amd64 build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -19,15 +19,16 @@ jobs:
       - name: Install dependencies
         run: sudo apt install gcc-aarch64-linux-gnu
       - name: Build
-        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+        run: /bin/sh -c "chmod +x scripts/build_linux_amd64.sh && bash scripts/build_linux_amd64.sh"
       - name: Upload
         uses: actions/upload-artifact@v1
         with:
           name: myurls-linux-amd64
           path: build/myurls-linux-amd64.tar.gz
+
   linux_arm64_build:
     name: Linux arm64 build
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -39,15 +40,16 @@ jobs:
       - name: Install dependencies
         run: sudo apt install gcc-aarch64-linux-gnu
       - name: Build
-        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+        run: /bin/sh -c "chmod +x scripts/build_linux_arm64.sh && bash scripts/build_linux_arm64.sh"
       - name: Upload
         uses: actions/upload-artifact@v1
         with:
           name: myurls-linux-arm64
           path: build/myurls-linux-arm64.tar.gz
+
   darwin_amd64_build:
-    name: Darwin amd64 Build
-    runs-on: ubuntu-22.04
+    name: Darwin amd64 build
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -59,15 +61,16 @@ jobs:
       - name: Install dependencies
         run: sudo apt install gcc-aarch64-linux-gnu
       - name: Build
-        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+        run: /bin/sh -c "chmod +x scripts/build_darwin_arm64.sh && bash scripts/build_darwin_arm64.sh"
       - name: Upload
         uses: actions/upload-artifact@v1
         with:
           name: myurls-darwin-amd64.tar.gz
           path: build/myurls-darwin-amd64.tar.gz
+
   windows_x64_build:
-    name: Windows X64 Build
-    runs-on: ubuntu-22.04
+    name: Windows x64 build
+    runs-on: ubuntu-20.04
     steps:
       - name: Set up Go 1.18
         uses: actions/setup-go@v1
@@ -79,7 +82,7 @@ jobs:
       - name: Install dependencies
         run: sudo apt install gcc-aarch64-linux-gnu
       - name: Build
-        run: /bin/sh -c "chmod +x release.sh && bash release.sh"
+        run: /bin/sh -c "chmod +x scripts/build_windows_x64.sh && bash scripts/build_windows_x64.sh"
       - name: Upload
         uses: actions/upload-artifact@v1
         with:

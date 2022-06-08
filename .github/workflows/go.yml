@@ -47,26 +47,26 @@ jobs:
           name: myurls-linux-arm64
           path: build/myurls-linux-arm64.tar.gz
 
-  darwin_amd64_build:
-    name: Darwin amd64 build
-    runs-on: ubuntu-20.04
-    steps:
-      - name: Set up Go 1.18
-        uses: actions/setup-go@v1
-        with:
-          go-version: 1.18
-        id: go
-      - name: Check out code into the Go module directory
-        uses: actions/checkout@v2
-      - name: Install dependencies
-        run: sudo apt install gcc-aarch64-linux-gnu
-      - name: Build
-        run: /bin/sh -c "chmod +x scripts/build_darwin_arm64.sh && bash scripts/build_darwin_arm64.sh"
-      - name: Upload
-        uses: actions/upload-artifact@v1
-        with:
-          name: myurls-darwin-amd64.tar.gz
-          path: build/myurls-darwin-amd64.tar.gz
+  # darwin_amd64_build:
+  #   name: Darwin amd64 build
+  #   runs-on: ubuntu-20.04
+  #   steps:
+  #     - name: Set up Go 1.18
+  #       uses: actions/setup-go@v1
+  #       with:
+  #         go-version: 1.18
+  #       id: go
+  #     - name: Check out code into the Go module directory
+  #       uses: actions/checkout@v2
+  #     - name: Install dependencies
+  #       run: sudo apt install gcc-aarch64-linux-gnu
+  #     - name: Build
+  #       run: /bin/sh -c "chmod +x scripts/build_darwin_amd64.sh && bash scripts/build_darwin_amd64.sh"
+  #     - name: Upload
+  #       uses: actions/upload-artifact@v1
+  #       with:
+  #         name: myurls-darwin-amd64.tar.gz
+  #         path: build/myurls-darwin-amd64.tar.gz
 
   windows_x64_build:
     name: Windows x64 build

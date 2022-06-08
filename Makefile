@@ -15,8 +15,8 @@ default:
 all:
 	@echo ${BINARY_LINUX}
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o ${BINARY_LINUX} ${GOFILES}
-	@echo ${BINARY_DARWIN}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ${BINARY_DARWIN} ${GOFILES}
+	# @echo ${BINARY_DARWIN}
+	# @CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -o ${BINARY_DARWIN} ${GOFILES}
 	@echo ${BINARY_WINDOWS}
 	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -o ${BINARY_WINDOWS} ${GOFILES}
 	@echo ${BINARY_ARM64}

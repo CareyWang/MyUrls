@@ -14,7 +14,7 @@ services:
     entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", myurls-redis:6379, "-ttl", "${MYURLS_TTL}"]
 
   myurls-redis:
-    image: "redis:5"
+    image: "redis:6"
     container_name: myurls-redis
     restart: always
     volumes:

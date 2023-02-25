@@ -2,7 +2,7 @@ FROM golang:1.19-alpine AS dependencies
 WORKDIR /app
 RUN go env -w GO111MODULE="on" && go env -w GOPROXY="https://goproxy.cn,direct"
 
-COPY go.sum go.mod ./
+COPY go.sum go.mod main.go ./
 RUN go mod tidy 
 
 FROM dependencies as build

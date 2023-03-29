@@ -1,18 +1,24 @@
 # MyUrls
 
-基于 golang1.15 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
+基于 Go 1.20 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
 
 ## Table of Contents
 
+- [MyUrls](#myurls)
+  - [Table of Contents](#table-of-contents)
 - [Update](#update)
 - [Dependencies](#dependencies)
-- [Docker](#Docker)
-- [Install](#install)
-- [Usage](#usage)
-- [API](#api)
-- [Maintainers](#maintainers)
-- [Contributing](#contributing)
-- [License](#license)
+  - [Docker](#docker)
+  - [Deploy Online](#deploy-online)
+    - [Deploy on Railway](#deploy-on-railway)
+      - [部署](#部署)
+      - [添加域名](#添加域名)
+  - [Install](#install)
+  - [Usage](#usage)
+  - [API](#api)
+  - [Maintainers](#maintainers)
+  - [Contributing](#contributing)
+  - [License](#license)
 
 # Update
 

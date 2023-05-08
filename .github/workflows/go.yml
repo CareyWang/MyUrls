@@ -11,7 +11,7 @@ jobs:
     # runs-on: self-hosted
     steps:
       - name: Set up Go 1.20
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.20
         id: go
@@ -22,7 +22,7 @@ jobs:
       - name: Build
         run: /bin/sh -c "chmod +x scripts/build_linux_amd64.sh && bash scripts/build_linux_amd64.sh"
       - name: Upload
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: myurls-linux-amd64
           path: build/myurls-linux-amd64.tar.gz
@@ -33,7 +33,7 @@ jobs:
     # runs-on: self-hosted
     steps:
       - name: Set up Go 1.20
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.20
         id: go
@@ -44,7 +44,7 @@ jobs:
       - name: Build
         run: /bin/sh -c "chmod +x scripts/build_linux_arm64.sh && bash scripts/build_linux_arm64.sh"
       - name: Upload
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: myurls-linux-arm64
           path: build/myurls-linux-arm64.tar.gz
@@ -54,7 +54,7 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Set up Go 1.20
-  #       uses: actions/setup-go@v2
+  #       uses: actions/setup-go@v4
   #       with:
   #         go-version: 1.20
   #       id: go
@@ -65,7 +65,7 @@ jobs:
   #     - name: Build
   #       run: /bin/sh -c "chmod +x scripts/build_darwin_amd64.sh && bash scripts/build_darwin_amd64.sh"
   #     - name: Upload
-  #       uses: actions/upload-artifact@v1
+  #       uses: actions/upload-artifact@v3
   #       with:
   #         name: myurls-darwin-amd64.tar.gz
   #         path: build/myurls-darwin-amd64.tar.gz
@@ -75,7 +75,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.20
-        uses: actions/setup-go@v2
+        uses: actions/setup-go@v4
         with:
           go-version: 1.20
         id: go
@@ -86,7 +86,7 @@ jobs:
       - name: Build
         run: /bin/sh -c "chmod +x scripts/build_windows_x64.sh && bash scripts/build_windows_x64.sh"
       - name: Upload
-        uses: actions/upload-artifact@v1
+        uses: actions/upload-artifact@v3
         with:
           name: myurls-windows-x64.tar.gz
           path: build/myurls-windows-x64.tar.gz

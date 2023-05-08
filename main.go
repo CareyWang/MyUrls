@@ -1,7 +1,9 @@
 package main
 
 import (
+	"crypto/md5"
 	"encoding/base64"
+	"encoding/hex"
 	"flag"
 	"fmt"
 	"log"
@@ -16,6 +18,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+// Response is the response structure
 type Response struct {
 	Code     int
 	Message  string
@@ -23,6 +26,7 @@ type Response struct {
 	ShortUrl string
 }
 
+// redisPoolConf is the Redis pool configuration.
 type redisPoolConf struct {
 	maxIdle        int
 	maxActive      int
@@ -33,19 +37,37 @@ type redisPoolConf struct {
 	handleTimeout  int
 }
 
+// letterBytes is a string containing all the characters used in the short URL generation.
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
+// shortUrlLen is the length of the generated short URL.
+const shortUrlLen = 7
+
+// defaultPort is the default port number.
 const defaultPort int = 8002
+
+// defaultExpire is the redis ttl in days for a short URL.
 const defaultExpire = 180
+
+// defaultRedisConfig is the default Redis configuration.
 const defaultRedisConfig = "127.0.0.1:6379"
 
+// defaultLockPrefix is the default prefix for Redis locks.
 const defaultLockPrefix = "myurls:lock:"
+
+// defaultRenewal is the default renewal time for Redis locks.
 const defaultRenewal = 1
 
+// secondsPerDay is the number of seconds in a day.
 const secondsPerDay = 24 * 3600
 
+// redisPool is a connection pool for Redis.
 var redisPool *redis.Pool
+
+// redisPoolConfig is the Redis pool configuration.
 var redisPoolConfig *redisPoolConf
+
+// redisClient is a Redis client.
 var redisClient redis.Conn
 
 func main() {
@@ -87,6 +109,7 @@ func main() {
 		})
 	})
 
+	// 短链接生成
 	router.POST("/short", func(context *gin.Context) {
 		res := &Response{
 			Code:     1,
@@ -138,6 +161,7 @@ func main() {
 		context.JSON(200, *res)
 	})
 
+	// 短链接跳转
 	router.GET("/:shortKey", func(context *gin.Context) {
 		shortKey := context.Param("shortKey")
 		longUrl := shortToLong(shortKey)
@@ -173,7 +197,9 @@ func longToShort(longUrl string, ttl int) string {
 	defer redisClient.Close()
 
 	// 是否生成过该长链接对应短链接
-	_existsKey, _ := redis.String(redisClient.Do("get", longUrl))
+	longUrlMD5Bytes := md5.Sum([]byte(longUrl))
+	longUrlMD5 := hex.EncodeToString(longUrlMD5Bytes[:])
+	_existsKey, _ := redis.String(redisClient.Do("get", longUrlMD5))
 	if _existsKey != "" {
 		_, _ = redisClient.Do("expire", _existsKey, ttl)
 
@@ -184,7 +210,7 @@ func longToShort(longUrl string, ttl int) string {
 	// 重试三次
 	var shortKey string
 	for i := 0; i < 3; i++ {
-		shortKey = generate(7)
+		shortKey = generate(shortUrlLen)
 
 		_existsLongUrl, _ := redis.String(redisClient.Do("get", shortKey))
 		if _existsLongUrl == "" {
@@ -193,10 +219,10 @@ func longToShort(longUrl string, ttl int) string {
 	}
 
 	if shortKey != "" {
-		_, _ = redisClient.Do("mset", shortKey, longUrl, longUrl, shortKey)
+		_, _ = redisClient.Do("mset", shortKey, longUrl, longUrlMD5, shortKey)
 
 		_, _ = redisClient.Do("expire", shortKey, ttl)
-		_, _ = redisClient.Do("expire", longUrl, secondsPerDay)
+		_, _ = redisClient.Do("expire", longUrlMD5, secondsPerDay)
 	}
 
 	return shortKey
@@ -222,16 +248,23 @@ func renew(shortKey string) {
 	}
 }
 
-// 产生一个63位随机整数
+// generate is a function that takes an integer bits and returns a string.
+// The function generates a random string of length equal to bits using the letterBytes slice.
+// The letterBytes slice contains characters that can be used to generate a random string.
+// The generation of the random string is based on the current time using the UnixNano() function.
 func generate(bits int) string {
+	// Create a byte slice b of length bits.
 	b := make([]byte, bits)
 
-	currentTime := time.Now().UnixNano()
-	rand.Seed(currentTime)
+	// Create a new random number generator with the current time as the seed.
+	r := rand.New(rand.NewSource(time.Now().UnixNano()))
 
+	// Generate a random byte for each element in the byte slice b using the letterBytes slice.
 	for i := range b {
-		b[i] = letterBytes[rand.Intn(len(letterBytes))]
+		b[i] = letterBytes[r.Intn(len(letterBytes))]
 	}
+
+	// Convert the byte slice to a string and return it.
 	return string(b)
 }
 

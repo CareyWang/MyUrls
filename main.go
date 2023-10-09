@@ -173,6 +173,12 @@ func main() {
 		}
 	})
 
+	// GC 优化
+	ballast := make([]byte, 1<<27) // 分配 128M 内存，不会实际占用物理内存，不可读写该变量
+	defer func() {
+		log.Println("ballast len %v", len(ballast))
+	}()	
+
 	router.Run(fmt.Sprintf(":%d", *port))
 }
 

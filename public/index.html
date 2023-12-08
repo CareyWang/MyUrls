@@ -34,8 +34,6 @@
 
   <script>
     const repo = 'https://github.com/CareyWang/MyUrls'
-    // const backend = 'http://example.com'
-    const backend = '.'
 
     let app = new Vue({
       el: "#app",
@@ -73,7 +71,7 @@
           let data = new FormData();
           data.append("longUrl", btoa(this.longUrl));
           data.append("shortKey", this.shortUrl.indexOf('http') < 0 ? this.shortUrl : '');
-          axios.post(backend + '/short', data, {
+          axios.post('/short', data, {
             header: {
               "Content-Type": "application/form-data; charset=utf-8"
             }

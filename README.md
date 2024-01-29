@@ -1,12 +1,9 @@
 # MyUrls
 
-基于 Go 1.21 与 Redis 实现的本地短链接服务，用于缩短请求链接与短链接还原。
+基于 Go 1.21 与 Redis 实现的本地短链接服务，用于缩短 URL 与短链接还原。
 
 ## Table of Contents
 
-- [MyUrls](#myurls)
-  - [Table of Contents](#table-of-contents)
-- [Update](#update)
 - [Dependencies](#dependencies)
   - [Docker](#docker)
   - [Deploy Online](#deploy-online)
@@ -15,18 +12,10 @@
       - [添加域名](#添加域名)
   - [Install](#install)
   - [Usage](#usage)
-  - [API](#api)
+    - [日志清理](#日志清理)
   - [Maintainers](#maintainers)
   - [Contributing](#contributing)
   - [License](#license)
-
-# Update
-
-- 20200330
-  集成前端至根路径，如: <http://127.0.0.1:8002/>。
-
-  > 注：如需使用集成的前端，项目部署请 clone 仓库后自行编译，并在代码根目录启动服务。或者可 nginx 单独配置 root 至 public 目录的 index.html。
-
 
 # Dependencies
 
@@ -93,12 +82,10 @@ bash release.sh
 
 ## Usage
 
-前往 [Release](https://github.com/CareyWang/MyUrls/releases) 下载对应平台可执行文件。
+前往 [Actions](https://github.com/CareyWang/MyUrls/actions/workflows/go.yml) 下载对应平台可执行文件。
 
 ```shell script
-./build/linux-amd64-myurls -h 
-
-Usage of ./build/linux-amd64-myurls:
+Usage:
   -conn string
         Redis连接，格式: host:port (default "127.0.0.1:6379")
   -domain string
@@ -114,13 +101,30 @@ Usage of ./build/linux-amd64-myurls:
 建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。
 
 ```shell script
-pm2 start myurls --watch --name myurls -- -domain example.com
+pm2 start myurls --name myurls -- -domain example.com
 ```
 
-## API
+### 日志清理
 
-[参考文档](https://myurls.mydoc.li)
+假定工作目录为 `/app`，可基于 logrotate 配置应用日志的自动轮转与清理。可参考示例配置，每天轮转一次日志文件，保留最近7天
 
+```shell 
+tee > /etc/logrotate.d/myurls <<EOF
+/app/logs/access.log {
+    daily
+    rotate 7
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+    create 640 root adm
+}
+EOF
+
+# 测试是否正常工作，不会实际执行切割
+logrotate -d /etc/logrotate.d/myurls
+```
 
 ## Maintainers
 
@@ -134,4 +138,4 @@ Small note: If editing the README, please conform to the [standard-readme](https
 
 ## License
 
-MIT © 2020 CareyWang
+MIT © 2024 CareyWang

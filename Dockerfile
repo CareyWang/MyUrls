@@ -1,4 +1,4 @@
-FROM golang:1.20-alpine AS build
+FROM golang:1.21-alpine AS build
 RUN apk update && apk add upx
 WORKDIR /app
 COPY main.go go.mod go.sum .

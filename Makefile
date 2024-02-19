@@ -5,41 +5,40 @@ BINARY_DARWIN_ARM64="build/myurls-darwin-arm64"
 BINARY_WINDOWS="build/myurls-windows-x64"
 BINARY_ARM64="build/myurls-linux-arm64"
 
-GOFILES="main.go"
 VERSION=1.0.0
 BUILD=`date +%FT%T%z`
 
 default:
 	@echo ${BINARY_DEFAULT}
-	@CGO_ENABLED=0 go build -ldflags="-s -w" -o ${BINARY_DEFAULT} ${GOFILES}
+	@CGO_ENABLED=0 go build -ldflags="-s -w" -o ${BINARY_DEFAULT}
 
 all:
 	@echo ${BINARY_LINUX}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX}
 	# @echo ${BINARY_DARWIN}
-	# @CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN} ${GOFILES}
+	# @CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
 	# @echo ${BINARY_DARWIN_ARM64}
-	# @CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64} ${GOFILES}
+	# @CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
 	@echo ${BINARY_WINDOWS}
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS}
 	@echo ${BINARY_ARM64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64}
 
 linux:
 	@echo ${BINARY_LINUX}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX}
 
 darwin:
 	@echo ${BINARY_DARWIN}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
 
 windows:
 	@echo ${BINARY_WINDOWS}
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS}
 
 aarch64:
 	@echo ${BINARY_ARM64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64} ${GOFILES}
+	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64}
 
 install:
 	@go mod tidy

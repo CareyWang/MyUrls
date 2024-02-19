@@ -2,7 +2,8 @@ name: Github CI
 
 on:
   push:
-    branches: [master]
+    branches: 
+      - '*'
 
 jobs:
   linux_amd64_build:

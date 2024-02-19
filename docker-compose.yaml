@@ -6,15 +6,15 @@ services:
     restart: always
     env_file: .env
     ports:
-      - "${MYURLS_PORT}:8002"
+      - "${MYURLS_PORT}:8080"
     volumes:
       - ./data/myurls/logs:/app/logs      
     depends_on:
       - myurls-redis
-    entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", myurls-redis:6379, "-ttl", "${MYURLS_TTL}"]
+    entrypoint: ["/app/myurls", "-domain", "${MYURLS_DOMAIN}", "-conn", myurls-redis:6379]
 
   myurls-redis:
-    image: "redis:6"
+    image: "redis:7"
     container_name: myurls-redis
     restart: always
     volumes:

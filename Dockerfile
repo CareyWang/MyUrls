@@ -1,10 +1,10 @@
 FROM golang:1.21-alpine AS build
-RUN apk update && apk add upx
 WORKDIR /app
-COPY main.go go.mod go.sum .
-RUN go mod tidy
-RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o myurls main.go \
-    && upx myurls
+COPY . .
+
+# RUN go env -w GOPROXY=https://mirrors.cloud.tencent.com/go/,direct
+RUN go mod download
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o myurls
 
 FROM scratch
 WORKDIR /app

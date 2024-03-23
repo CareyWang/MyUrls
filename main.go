@@ -92,7 +92,7 @@ func run() {
 	router := gin.Default()
 
 	// logger
-	router.Use(LoggerToFile())
+	router.Use(initServiceLogger())
 
 	// static files
 	router.LoadHTMLGlob("public/*.html")

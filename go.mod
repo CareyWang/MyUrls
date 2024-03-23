@@ -5,9 +5,9 @@ go 1.22
 require (
 	github.com/gin-gonic/gin v1.9.1
 	github.com/redis/go-redis/v9 v9.5.1
-	github.com/sirupsen/logrus v1.9.3
 	github.com/stretchr/testify v1.9.0
 	go.uber.org/zap v1.27.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require (

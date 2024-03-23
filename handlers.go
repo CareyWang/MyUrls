@@ -37,8 +37,8 @@ func ShortToLongHandler() gin.HandlerFunc {
 }
 
 type LongToShortParams struct {
-	LongUrl  string `form:"longUrl" binding:"required"`
-	ShortKey string `form:"shortKey"`
+	LongUrl  string `form:"longUrl" json:"longUrl" binding:"required"`
+	ShortKey string `form:"shortKey" json:"shortKey" binding:"omitempty"`
 }
 
 // LongToShortHandler creates a short URL from a long URL

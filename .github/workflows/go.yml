@@ -11,9 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.22
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '^1.22.0'
+          go-version: '^1.22.1'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master
@@ -33,9 +33,9 @@ jobs:
     # runs-on: self-hosted
     steps:
       - name: Set up Go 1.22
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '^1.22.0'
+          go-version: '^1.22.1'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master
@@ -54,9 +54,9 @@ jobs:
   #   runs-on: ubuntu-latest
   #   steps:
   #     - name: Set up Go 1.22
-  #       uses: actions/setup-go@v4
+  #       uses: actions/setup-go@v5
   #       with:
-  #         go-version: '^1.22.0'
+  #         go-version: '^1.22.1'
   #       id: go
   #     - name: Check out code into the Go module directory
   #       uses: actions/checkout@master
@@ -75,9 +75,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Set up Go 1.22
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
-          go-version: '^1.22.0'
+          go-version: '^1.22.1'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master

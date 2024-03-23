@@ -10,10 +10,10 @@ jobs:
     name: Linux amd64 build
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.21
+      - name: Set up Go 1.22
         uses: actions/setup-go@v4
         with:
-          go-version: '^1.21.6'
+          go-version: '^1.22.0'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master
@@ -32,10 +32,10 @@ jobs:
     runs-on: ubuntu-latest
     # runs-on: self-hosted
     steps:
-      - name: Set up Go 1.21
+      - name: Set up Go 1.22
         uses: actions/setup-go@v4
         with:
-          go-version: '^1.21.6'
+          go-version: '^1.22.0'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master
@@ -53,10 +53,10 @@ jobs:
   #   name: Darwin amd64 build
   #   runs-on: ubuntu-latest
   #   steps:
-  #     - name: Set up Go 1.21
+  #     - name: Set up Go 1.22
   #       uses: actions/setup-go@v4
   #       with:
-  #         go-version: '^1.21.6'
+  #         go-version: '^1.22.0'
   #       id: go
   #     - name: Check out code into the Go module directory
   #       uses: actions/checkout@master
@@ -74,10 +74,10 @@ jobs:
     name: Windows x64 build
     runs-on: ubuntu-latest
     steps:
-      - name: Set up Go 1.21
+      - name: Set up Go 1.22
         uses: actions/setup-go@v4
         with:
-          go-version: '^1.21.6'
+          go-version: '^1.22.0'
         id: go
       - name: Check out code into the Go module directory
         uses: actions/checkout@master

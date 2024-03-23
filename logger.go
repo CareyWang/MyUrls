@@ -122,9 +122,9 @@ func LoggerToFile() gin.HandlerFunc {
 
 // 定义 zap logger
 func initZapLogger() {
-	writeSyncer := getLogWriter()
+	fileWriteSyncer := getLogWriter()
 	encoder := getEncoder()
-	core := zapcore.NewCore(encoder, writeSyncer, zapcore.DebugLevel)
+	core := zapcore.NewCore(encoder, zapcore.NewMultiWriteSyncer(fileWriteSyncer, zapcore.AddSync(os.Stdout)), zapcore.DebugLevel)
 
 	_logger := zap.New(core)
 	defer _logger.Sync()

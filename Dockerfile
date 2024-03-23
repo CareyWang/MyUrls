@@ -1,4 +1,4 @@
-FROM golang:1.21-alpine AS build
+FROM golang:1.22-alpine AS build
 WORKDIR /app
 COPY . .
 
@@ -10,5 +10,5 @@ FROM scratch
 WORKDIR /app
 COPY --from=build /app/myurls ./
 COPY public/* ./public/
-EXPOSE 8002
+EXPOSE 8080
 ENTRYPOINT ["/app/myurls"]

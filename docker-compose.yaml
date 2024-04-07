@@ -6,7 +6,7 @@ services:
     restart: always
     env_file: .env
     ports:
-      - "${MYURLS_PORT}:8080"
+      - "${MYURLS_PORT}:${MYURLS_PORT}"
     volumes:
       - ./data/myurls/logs:/app/logs      
     depends_on:

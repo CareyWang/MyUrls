@@ -96,6 +96,7 @@ func run() {
 
 	// static files
 	router.LoadHTMLGlob("public/*.html")
+	router.StaticFile("/logo.png", "public/logo.png")
 
 	router.GET("/", func(context *gin.Context) {
 		context.HTML(http.StatusOK, "index.html", gin.H{

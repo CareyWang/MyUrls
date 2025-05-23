@@ -1,6 +1,6 @@
 # MyUrls
 
-基于 Go 1.22 与 Redis 实现的本地短链接服务，用于缩短 URL 与短链接还原。
+基于 Go 1.24 与 Redis 实现的本地短链接服务，用于缩短 URL 与短链接还原。
 
 ## Table of Contents
 

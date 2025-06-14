@@ -1,10 +1,13 @@
 #!/bin/bash
 
+# 确保 build 目录存在
+mkdir -p build
+
 make install
 make all
 
 mkdir -p myurls
-cp -r public myurls/
+cp -r web myurls/
 
 # darwin-amd64
 cp build/myurls-darwin-amd64 myurls/

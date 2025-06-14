@@ -2,17 +2,30 @@ package storage
 
 import (
 	"context"
-	"database/sql"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
 
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/glebarez/sqlite"
+	"gorm.io/gorm"
 )
 
+type URLMapping struct {
+	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
+	Key       string `gorm:"index;unique" json:"key"`
+	Value     string `gorm:"not null" json:"value"`
+	ExpiresAt *int64 `gorm:"index" json:"expires_at"`
+	CreatedAt int64  `gorm:"autoCreateTime" json:"created_at"`
+}
+
+func (URLMapping) TableName() string {
+	return "url_mappings"
+}
+
 type SQLiteDriver struct {
-	db *sql.DB
+	db *gorm.DB
 }
 
 func NewSQLiteDriver(filePath string) (*SQLiteDriver, error) {
@@ -22,15 +35,15 @@ func NewSQLiteDriver(filePath string) (*SQLiteDriver, error) {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	db, err := sql.Open("sqlite3", filePath)
+	db, err := gorm.Open(sqlite.Open(filePath), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
 
 	driver := &SQLiteDriver{db: db}
 
-	// 初始化表结构
-	if err := driver.initTables(); err != nil {
+	// 自动迁移表结构
+	if err := driver.db.AutoMigrate(&URLMapping{}); err != nil {
 		return nil, err
 	}
 
@@ -40,30 +53,11 @@ func NewSQLiteDriver(filePath string) (*SQLiteDriver, error) {
 	return driver, nil
 }
 
-func (s *SQLiteDriver) initTables() error {
-	query := `
-	CREATE TABLE IF NOT EXISTS url_mappings (
-		key TEXT PRIMARY KEY,
-		value TEXT NOT NULL,
-		expires_at INTEGER,
-		created_at INTEGER DEFAULT (strftime('%s', 'now'))
-	);
-	
-	CREATE INDEX IF NOT EXISTS idx_expires_at ON url_mappings(expires_at);
-	`
-
-	_, err := s.db.Exec(query)
-	return err
-}
-
 func (s *SQLiteDriver) Get(ctx context.Context, key string) (string, error) {
-	var value string
-	var expiresAt *int64
+	var mapping URLMapping
+	err := s.db.WithContext(ctx).Where("key = ?", key).First(&mapping).Error
 
-	query := `SELECT value, expires_at FROM url_mappings WHERE key = ?`
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&value, &expiresAt)
-
-	if err == sql.ErrNoRows {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return "", fmt.Errorf("redis: nil") // 模拟Redis的行为
 	}
 	if err != nil {
@@ -71,30 +65,31 @@ func (s *SQLiteDriver) Get(ctx context.Context, key string) (string, error) {
 	}
 
 	// 检查是否过期
-	if expiresAt != nil && time.Now().Unix() > *expiresAt {
+	if mapping.ExpiresAt != nil && time.Now().Unix() > *mapping.ExpiresAt {
 		// 删除过期的key
-		s.db.ExecContext(ctx, `DELETE FROM url_mappings WHERE key = ?`, key)
+		s.db.WithContext(ctx).Delete(&URLMapping{}, "key = ?", key)
 		return "", fmt.Errorf("redis: nil") // 模拟Redis的行为
 	}
 
-	return value, nil
+	return mapping.Value, nil
 }
 
 func (s *SQLiteDriver) SetEx(ctx context.Context, key string, value string, expiration time.Duration) error {
 	expiresAt := time.Now().Add(expiration).Unix()
 
-	query := `INSERT OR REPLACE INTO url_mappings (key, value, expires_at) VALUES (?, ?, ?)`
-	_, err := s.db.ExecContext(ctx, query, key, value, expiresAt)
-	return err
+	// 使用 ON CONFLICT 子句来处理 upsert 操作
+	result := s.db.WithContext(ctx).
+		Exec("INSERT INTO url_mappings (key, value, expires_at, created_at) VALUES (?, ?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at",
+			key, value, expiresAt, time.Now().Unix())
+
+	return result.Error
 }
 
 func (s *SQLiteDriver) Exists(ctx context.Context, key string) (bool, error) {
-	var expiresAt *int64
+	var mapping URLMapping
+	err := s.db.WithContext(ctx).Select("expires_at").Where("key = ?", key).First(&mapping).Error
 
-	query := `SELECT expires_at FROM url_mappings WHERE key = ?`
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&expiresAt)
-
-	if err == sql.ErrNoRows {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return false, nil
 	}
 	if err != nil {
@@ -102,9 +97,9 @@ func (s *SQLiteDriver) Exists(ctx context.Context, key string) (bool, error) {
 	}
 
 	// 检查是否过期
-	if expiresAt != nil && time.Now().Unix() > *expiresAt {
+	if mapping.ExpiresAt != nil && time.Now().Unix() > *mapping.ExpiresAt {
 		// 删除过期的key
-		s.db.ExecContext(ctx, `DELETE FROM url_mappings WHERE key = ?`, key)
+		s.db.WithContext(ctx).Delete(&URLMapping{}, "key = ?", key)
 		return false, nil
 	}
 
@@ -112,45 +107,37 @@ func (s *SQLiteDriver) Exists(ctx context.Context, key string) (bool, error) {
 }
 
 func (s *SQLiteDriver) TTL(ctx context.Context, key string) (time.Duration, error) {
-	var expiresAt *int64
+	var mapping URLMapping
+	err := s.db.WithContext(ctx).Select("expires_at").Where("key = ?", key).First(&mapping).Error
 
-	query := `SELECT expires_at FROM url_mappings WHERE key = ?`
-	err := s.db.QueryRowContext(ctx, query, key).Scan(&expiresAt)
-
-	if err == sql.ErrNoRows {
+	if errors.Is(err, gorm.ErrRecordNotFound) {
 		return -2 * time.Second, nil // key不存在
 	}
 	if err != nil {
 		return 0, err
 	}
 
-	if expiresAt == nil {
+	if mapping.ExpiresAt == nil {
 		return -1 * time.Second, nil // 永不过期
 	}
 
 	now := time.Now().Unix()
-	if now > *expiresAt {
+	if now > *mapping.ExpiresAt {
 		return -2 * time.Second, nil // 已过期
 	}
 
-	return time.Duration(*expiresAt-now) * time.Second, nil
+	return time.Duration(*mapping.ExpiresAt-now) * time.Second, nil
 }
 
 func (s *SQLiteDriver) Expire(ctx context.Context, key string, expiration time.Duration) error {
 	expiresAt := time.Now().Add(expiration).Unix()
 
-	query := `UPDATE url_mappings SET expires_at = ? WHERE key = ?`
-	result, err := s.db.ExecContext(ctx, query, expiresAt, key)
-	if err != nil {
-		return err
+	result := s.db.WithContext(ctx).Model(&URLMapping{}).Where("key = ?", key).Update("expires_at", expiresAt)
+	if result.Error != nil {
+		return result.Error
 	}
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return err
-	}
-
-	if rowsAffected == 0 {
+	if result.RowsAffected == 0 {
 		return fmt.Errorf("key not found")
 	}
 
@@ -158,11 +145,19 @@ func (s *SQLiteDriver) Expire(ctx context.Context, key string, expiration time.D
 }
 
 func (s *SQLiteDriver) Ping(ctx context.Context) error {
-	return s.db.PingContext(ctx)
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.PingContext(ctx)
 }
 
 func (s *SQLiteDriver) Close() error {
-	return s.db.Close()
+	sqlDB, err := s.db.DB()
+	if err != nil {
+		return err
+	}
+	return sqlDB.Close()
 }
 
 // 清理过期数据的后台任务
@@ -172,6 +167,6 @@ func (s *SQLiteDriver) cleanupExpiredKeys() {
 
 	for range ticker.C {
 		now := time.Now().Unix()
-		s.db.Exec(`DELETE FROM url_mappings WHERE expires_at IS NOT NULL AND expires_at < ?`, now)
+		s.db.Delete(&URLMapping{}, "expires_at IS NOT NULL AND expires_at < ?", now)
 	}
 }

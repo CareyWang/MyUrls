@@ -104,9 +104,10 @@ type DataSyncer struct {
 func (s *DataSyncer) syncData(ctx context.Context) error {
 	logger.Logger.Info("开始同步数据...")
 
-	// 获取所有 Redis keys
 	var cursor uint64
-	var allKeys []string
+	syncedCount := 0
+	errorCount := 0
+	totalKeys := 0
 
 	for {
 		keys, nextCursor, err := s.redisClient.Scan(ctx, cursor, "*", int64(s.batchSize)).Result()
@@ -114,38 +115,29 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 			return fmt.Errorf("扫描 Redis keys 失败: %w", err)
 		}
 
-		allKeys = append(allKeys, keys...)
-		cursor = nextCursor
+		totalKeys += len(keys)
 
+		// 立即处理当前批次的keys
+		if len(keys) > 0 {
+			if err := s.syncBatch(ctx, keys); err != nil {
+				logger.Logger.Errorf("批量同步失败: %v", err)
+				errorCount++
+			} else {
+				syncedCount += len(keys)
+			}
+		}
+
+		cursor = nextCursor
 		if cursor == 0 {
 			break
 		}
 	}
 
-	logger.Logger.Infof("找到 %d 个 Redis keys", len(allKeys))
+	logger.Logger.Infof("找到 %d 个 Redis keys", totalKeys)
 
-	if len(allKeys) == 0 {
+	if totalKeys == 0 {
 		logger.Logger.Info("没有找到需要同步的数据")
 		return nil
-	}
-
-	// 批量同步数据
-	syncedCount := 0
-	errorCount := 0
-
-	for i := 0; i < len(allKeys); i += s.batchSize {
-		end := i + s.batchSize
-		if end > len(allKeys) {
-			end = len(allKeys)
-		}
-
-		batch := allKeys[i:end]
-		if err := s.syncBatch(ctx, batch); err != nil {
-			logger.Logger.Errorf("批量同步失败: %v", err)
-			errorCount++
-		} else {
-			syncedCount += len(batch)
-		}
 	}
 
 	logger.Logger.Infof("同步完成: 成功 %d 个，失败 %d 个批次", syncedCount, errorCount)

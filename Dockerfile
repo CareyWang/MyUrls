@@ -6,9 +6,9 @@ COPY . .
 RUN go mod download
 RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o myurls
 
-FROM scratch
+FROM alpine:latest
 WORKDIR /app
 COPY --from=build /app/myurls ./
-COPY public/* ./public/
+COPY web/* ./web/
 EXPOSE 8080
 ENTRYPOINT ["/app/myurls"]

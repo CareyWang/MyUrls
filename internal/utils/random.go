@@ -1,4 +1,4 @@
-package main
+package utils
 
 import (
 	"math/rand"
@@ -7,7 +7,7 @@ import (
 
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-// generate is a function that takes an integer bits and returns a string.
+// GenerateRandomString is a function that takes an integer bits and returns a string.
 // The function generates a random string of length equal to bits using the letterBytes slice.
 // The letterBytes slice contains characters that can be used to generate a random string.
 // The generation of the random string is based on the current time using the UnixNano() function.

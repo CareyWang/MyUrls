@@ -6,6 +6,7 @@ toolchain go1.24.3
 
 require (
 	github.com/gin-gonic/gin v1.10.1
+	github.com/mattn/go-sqlite3 v1.14.18
 	github.com/redis/go-redis/v9 v9.8.0
 	github.com/stretchr/testify v1.10.0
 	go.uber.org/zap v1.27.0

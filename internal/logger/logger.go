@@ -1,4 +1,4 @@
-package main
+package logger
 
 import (
 	"os"
@@ -11,7 +11,7 @@ import (
 	"gopkg.in/natefinch/lumberjack.v2"
 )
 
-var logger *zap.SugaredLogger
+var Logger *zap.SugaredLogger
 
 const (
 	logFileMaxSize    = 50    // 日志文件最大大小（MB）
@@ -20,7 +20,7 @@ const (
 	logFileCompress   = false // 是否压缩备份文件
 )
 
-func InitLogger() {
+func Init() {
 	// 创建 logs 目录
 	createLogPath()
 
@@ -52,7 +52,7 @@ func initZapLogger() {
 	encoder := getEncoder()
 	core := zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel)
 
-	logger = zap.New(core).Sugar()
+	Logger = zap.New(core).Sugar()
 }
 
 // getEncoder 获取 zap encoder
@@ -89,8 +89,8 @@ func initGinLogger() *zap.Logger {
 	return zap.New(core, zap.AddCaller())
 }
 
-// initServiceLogger 初始化服务日志
-func initServiceLogger() gin.HandlerFunc {
+// InitServiceLogger 初始化服务日志
+func InitServiceLogger() gin.HandlerFunc {
 	_logger := initGinLogger()
 	return func(c *gin.Context) {
 		start := time.Now()

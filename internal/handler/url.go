@@ -1,24 +1,34 @@
-package main
+package handler
 
 import (
 	"encoding/base64"
 	"time"
 
 	"github.com/gin-gonic/gin"
+
+	"github.com/CareyWang/MyUrls/internal/logger"
+	"github.com/CareyWang/MyUrls/internal/model"
+	"github.com/CareyWang/MyUrls/internal/service"
+	"github.com/CareyWang/MyUrls/internal/utils"
 )
 
 const defaultTTL = time.Hour * 24 * 365 // 默认过期时间，1年
 const defaultRenewTime = time.Hour * 48 // 默认续命时间，2天
 const defaultShortKeyLength = 7         // 默认短链接长度，7位
 
+var (
+	Proto  = "https"
+	Domain = "localhost:8080"
+)
+
 // ShortToLongHandler gets the long URL from a short URL
 func ShortToLongHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		resp := Response{}
+		resp := model.Response{}
 		shortKey := c.Param("shortKey")
-		longURL := ShortToLong(c, shortKey)
+		longURL := service.ShortToLong(c, shortKey)
 		if longURL == "" {
-			resp.Code = ResponseCodeServerError
+			resp.Code = model.ResponseCodeServerError
 			resp.Msg = "failed to get long URL, please check the short URL if exists or expired"
 
 			c.JSON(404, resp)
@@ -28,8 +38,8 @@ func ShortToLongHandler() gin.HandlerFunc {
 		// todo
 		// check whether need renew expiration time
 		// only renew once per day
-		// if err := Renew(c, shortKey, defaultRenewTime); err != nil {
-		// 	logger.Warn("failed to renew short URL: ", err.Error())
+		// if err := service.Renew(c, shortKey, defaultRenewTime); err != nil {
+		// 	logger.Logger.Warn("failed to renew short URL: ", err.Error())
 		// }
 
 		c.Redirect(301, longURL)
@@ -44,14 +54,14 @@ type LongToShortParams struct {
 // LongToShortHandler creates a short URL from a long URL
 func LongToShortHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
-		resp := Response{}
+		resp := model.Response{}
 
 		// check parameters
 		req := LongToShortParams{}
 		if err := c.ShouldBind(&req); err != nil {
-			resp.Code = ResponseCodeParamsCheckError
+			resp.Code = model.ResponseCodeParamsCheckError
 			resp.Msg = "invalid parameters"
-			logger.Warn("invalid parameters: ", err.Error())
+			logger.Logger.Warn("invalid parameters: ", err.Error())
 
 			c.JSON(200, resp)
 			return
@@ -65,46 +75,46 @@ func LongToShortHandler() gin.HandlerFunc {
 
 		// generate short key
 		if req.ShortKey == "" {
-			req.ShortKey = GenerateRandomString(defaultShortKeyLength)
+			req.ShortKey = utils.GenerateRandomString(defaultShortKeyLength)
 		}
 		// check whether short key exists
-		exists, err := CheckRedisKeyIfExist(c, req.ShortKey)
+		exists, err := service.CheckKeyExists(c, req.ShortKey)
 		if err != nil {
-			resp.Code = ResponseCodeServerError
+			resp.Code = model.ResponseCodeServerError
 			resp.Msg = "failed to check short key"
-			logger.Error("failed to check short key: ", err.Error())
+			logger.Logger.Error("failed to check short key: ", err.Error())
 
 			c.JSON(200, resp)
 			return
 		}
 		if exists {
-			resp.Code = ResponseCodeParamsCheckError
+			resp.Code = model.ResponseCodeParamsCheckError
 			resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"
 
-			logger.Info("short key already exists: ", req.ShortKey)
+			logger.Logger.Info("short key already exists: ", req.ShortKey)
 			c.JSON(200, resp)
 			return
 		}
 
-		options := &LongToShortOptions{
+		options := &service.LongToShortOptions{
 			ShortKey:   req.ShortKey,
 			URL:        req.LongUrl,
-			expiration: defaultTTL,
+			Expiration: defaultTTL,
 		}
-		if err := LongToShort(c, options); err != nil {
-			resp.Code = ResponseCodeServerError
+		if err := service.LongToShort(c, options); err != nil {
+			resp.Code = model.ResponseCodeServerError
 			resp.Msg = "failed to create short URL"
-			logger.Warn("failed to create short URL: ", err.Error())
+			logger.Logger.Warn("failed to create short URL: ", err.Error())
 
 			c.JSON(200, resp)
 			return
 		}
 
-		shortURL := proto + "://" + domain + "/" + options.ShortKey
+		shortURL := Proto + "://" + Domain + "/" + options.ShortKey
 
 		// 兼容以前的返回结构体
 		respDataLegacy := gin.H{
-			"Code":     ResponseCodeSuccessLegacy,
+			"Code":     model.ResponseCodeSuccessLegacy,
 			"ShortUrl": shortURL,
 		}
 		c.JSON(200, respDataLegacy)

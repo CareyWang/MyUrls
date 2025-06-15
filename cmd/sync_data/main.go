@@ -43,9 +43,13 @@ func main() {
 
 	// 初始化 Redis 客户端
 	redisClient := redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: redisPassword,
-		DB:       0,
+		Addr:         redisAddr,
+		Password:     redisPassword,
+		DB:           0,
+		DialTimeout:  500 * time.Millisecond,
+		ReadTimeout:  500 * time.Millisecond,
+		WriteTimeout: 500 * time.Millisecond,
+		MaxRetries:   1,
 	})
 	defer redisClient.Close()
 
@@ -108,6 +112,8 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 	syncedCount := 0
 	errorCount := 0
 	totalKeys := 0
+	batchCount := 0
+	startTime := time.Now()
 
 	for {
 		keys, nextCursor, err := s.redisClient.Scan(ctx, cursor, "*", int64(s.batchSize)).Result()
@@ -116,15 +122,21 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 		}
 
 		totalKeys += len(keys)
+		batchCount++
 
 		// 立即处理当前批次的keys
 		if len(keys) > 0 {
+			logger.Logger.Infof("处理第 %d 批次，包含 %d 个 keys", batchCount, len(keys))
 			if err := s.syncBatch(ctx, keys); err != nil {
 				logger.Logger.Errorf("批量同步失败: %v", err)
 				errorCount++
 			} else {
 				syncedCount += len(keys)
 			}
+
+			// 显示进度信息
+			elapsed := time.Since(startTime)
+			logger.Logger.Infof("进度更新: 已处理 %d 个 keys，成功 %d 个，用时 %v", totalKeys, syncedCount, elapsed.Truncate(time.Second))
 		}
 
 		cursor = nextCursor
@@ -140,7 +152,11 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 		return nil
 	}
 
-	logger.Logger.Infof("同步完成: 成功 %d 个，失败 %d 个批次", syncedCount, errorCount)
+	totalTime := time.Since(startTime)
+	successRate := float64(syncedCount) / float64(totalKeys) * 100
+	logger.Logger.Infof("同步完成: 总计 %d 个 keys，成功 %d 个 (%.1f%%)，失败 %d 个批次，总用时 %v",
+		totalKeys, syncedCount, successRate, errorCount, totalTime.Truncate(time.Second))
+
 	return nil
 }
 

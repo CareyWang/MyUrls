@@ -10,7 +10,24 @@ import (
 
 	"github.com/glebarez/sqlite"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 )
+
+// 完全静默的logger，不输出任何日志
+type SilentLogger struct{}
+
+func (l SilentLogger) LogMode(level logger.LogLevel) logger.Interface {
+	return l
+}
+
+func (l SilentLogger) Info(context.Context, string, ...interface{}) {}
+
+func (l SilentLogger) Warn(context.Context, string, ...interface{}) {}
+
+func (l SilentLogger) Error(context.Context, string, ...interface{}) {}
+
+func (l SilentLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
+}
 
 type URLMapping struct {
 	ID        uint   `gorm:"primaryKey;autoIncrement" json:"id"`
@@ -35,7 +52,10 @@ func NewSQLiteDriver(filePath string) (*SQLiteDriver, error) {
 		return nil, fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	db, err := gorm.Open(sqlite.Open(filePath), &gorm.Config{})
+	// 配置完全静默的自定义logger
+	db, err := gorm.Open(sqlite.Open(filePath), &gorm.Config{
+		Logger: SilentLogger{},
+	})
 	if err != nil {
 		return nil, err
 	}

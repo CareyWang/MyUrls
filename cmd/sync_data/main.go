@@ -25,7 +25,7 @@ func init() {
 	flag.StringVar(&redisAddr, "redis-addr", "localhost:6379", "Redis 地址")
 	flag.StringVar(&redisPassword, "redis-password", "", "Redis 密码")
 	flag.StringVar(&sqliteFile, "sqlite-file", "./data/myurls.db", "SQLite 文件路径")
-	flag.IntVar(&batchSize, "batch-size", 100, "批量处理大小")
+	flag.IntVar(&batchSize, "batch-size", 200, "批量处理大小")
 }
 
 func main() {
@@ -110,7 +110,7 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 
 	var cursor uint64
 	syncedCount := 0
-	errorCount := 0
+	failedCount := 0
 	totalKeys := 0
 	batchCount := 0
 	startTime := time.Now()
@@ -126,17 +126,15 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 
 		// 立即处理当前批次的keys
 		if len(keys) > 0 {
-			logger.Logger.Infof("处理第 %d 批次，包含 %d 个 keys", batchCount, len(keys))
-			if err := s.syncBatch(ctx, keys); err != nil {
-				logger.Logger.Errorf("批量同步失败: %v", err)
-				errorCount++
-			} else {
-				syncedCount += len(keys)
-			}
+			logger.Logger.Infof("处理第 %d 批次，包含 %d 个 key", batchCount, len(keys))
+			batchSynced, batchFailed := s.syncBatch(ctx, keys)
+			syncedCount += batchSynced
+			failedCount += batchFailed
 
 			// 显示进度信息
 			elapsed := time.Since(startTime)
-			logger.Logger.Infof("进度更新: 已处理 %d 个 keys，成功 %d 个，用时 %v", totalKeys, syncedCount, elapsed.Truncate(time.Second))
+			logger.Logger.Infof("进度更新: 已处理 %d 个 key，成功 %d 个，失败 %d 个，用时 %v",
+				totalKeys, syncedCount, failedCount, elapsed.Truncate(time.Second))
 		}
 
 		cursor = nextCursor
@@ -145,7 +143,7 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 		}
 	}
 
-	logger.Logger.Infof("找到 %d 个 Redis keys", totalKeys)
+	logger.Logger.Infof("找到 %d 个 Redis key", totalKeys)
 
 	if totalKeys == 0 {
 		logger.Logger.Info("没有找到需要同步的数据")
@@ -154,45 +152,55 @@ func (s *DataSyncer) syncData(ctx context.Context) error {
 
 	totalTime := time.Since(startTime)
 	successRate := float64(syncedCount) / float64(totalKeys) * 100
-	logger.Logger.Infof("同步完成: 总计 %d 个 keys，成功 %d 个 (%.1f%%)，失败 %d 个批次，总用时 %v",
-		totalKeys, syncedCount, successRate, errorCount, totalTime.Truncate(time.Second))
+	logger.Logger.Infof("同步完成: 总计 %d 个 key，成功 %d 个 (%.1f%%)，失败 %d 个，总用时 %v",
+		totalKeys, syncedCount, successRate, failedCount, totalTime.Truncate(time.Second))
 
 	return nil
 }
 
-func (s *DataSyncer) syncBatch(ctx context.Context, keys []string) error {
+func (s *DataSyncer) syncBatch(ctx context.Context, keys []string) (syncedCount, failedCount int) {
 	for _, key := range keys {
-		// 获取 Redis 中的值
-		value, err := s.redisClient.Get(ctx, key).Result()
-		if err != nil {
-			if err == redis.Nil {
-				// key 不存在，跳过
-				continue
-			}
-			return fmt.Errorf("获取 Redis key %s 失败: %w", key, err)
-		}
-
-		// 获取 TTL
-		ttl, err := s.redisClient.TTL(ctx, key).Result()
-		if err != nil {
-			return fmt.Errorf("获取 Redis key %s TTL 失败: %w", key, err)
-		}
-
-		// 同步到 SQLite
-		if ttl == -1 {
-			// 永不过期的 key，设置一个很长的过期时间
-			err = s.sqliteDriver.SetEx(ctx, key, value, 10*365*24*time.Hour)
-		} else if ttl > 0 {
-			// 有过期时间的 key
-			err = s.sqliteDriver.SetEx(ctx, key, value, ttl)
+		if err := s.syncSingleKey(ctx, key); err != nil {
+			logger.Logger.Warnf("同步 key %s 失败: %v", key, err)
+			failedCount++
 		} else {
-			// TTL 为 -2 表示 key 不存在，跳过
-			continue
+			syncedCount++
 		}
+	}
+	return syncedCount, failedCount
+}
 
-		if err != nil {
-			return fmt.Errorf("同步 key %s 到 SQLite 失败: %w", key, err)
+func (s *DataSyncer) syncSingleKey(ctx context.Context, key string) error {
+	// 获取 Redis 中的值
+	value, err := s.redisClient.Get(ctx, key).Result()
+	if err != nil {
+		if err == redis.Nil {
+			// key 不存在，跳过
+			return nil
 		}
+		return fmt.Errorf("获取 Redis key %s 失败: %w", key, err)
+	}
+
+	// 获取 TTL
+	ttl, err := s.redisClient.TTL(ctx, key).Result()
+	if err != nil {
+		return fmt.Errorf("获取 Redis key %s TTL 失败: %w", key, err)
+	}
+
+	// 同步到 SQLite
+	if ttl == -1 {
+		// 永不过期的 key，设置一个很长的过期时间
+		err = s.sqliteDriver.SetEx(ctx, key, value, 10*365*24*time.Hour)
+	} else if ttl > 0 {
+		// 有过期时间的 key
+		err = s.sqliteDriver.SetEx(ctx, key, value, ttl)
+	} else {
+		// TTL 为 -2 表示 key 不存在，跳过
+		return nil
+	}
+
+	if err != nil {
+		return fmt.Errorf("同步 key %s 到 SQLite 失败: %w", key, err)
 	}
 
 	return nil

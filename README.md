@@ -2,195 +2,229 @@
 
 基于 Go 1.24 与 Redis/SQLite 实现的本地短链接服务，用于缩短 URL 与短链接还原。
 
-## Table of Contents
+## 目录
 
-- [项目结构](#项目结构)
-- [Dependencies](#dependencies)
-  - [Docker](#docker)
-  - [Install](#install)
-  - [Usage](#usage)
-    - [日志清理](#日志清理)
-  - [Maintainers](#maintainers)
-  - [Contributing](#contributing)
-  - [License](#license)
+- [特性介绍](#特性介绍)
+- [快速开始](#快速开始)
+- [安装与构建](#安装与构建)
+- [配置说明](#配置说明)
+- [使用指南](#使用指南)
+- [高级功能](#高级功能)
+- [开发指南](#开发指南)
+- [项目信息](#项目信息)
 
-## 项目结构
+## 特性介绍
 
-项目采用标准的Go项目分层架构，便于维护和扩展：
+### 架构设计
 
-```
+项目采用标准的Go分层架构，便于维护和扩展：
+
+```shell
 MyUrls/
-├── cmd/myurls/                # 主程序入口
-│   └── main.go
-├── internal/                  # 内部包，不对外暴露
-│   ├── config/               # 配置管理
-│   │   ├── config.go
-│   │   └── config_test.go
-│   ├── handler/              # HTTP处理器
-│   │   └── url.go
-│   ├── logger/               # 日志处理
-│   │   └── logger.go
-│   ├── model/                # 数据模型和常量
-│   │   └── response.go
-│   ├── service/              # 业务逻辑层
-│   │   ├── url.go
-│   │   └── url_test.go
-│   ├── storage/              # 存储层
-│   │   ├── interface.go      # 存储接口定义
-│   │   ├── lru.go            # LRU缓存实现
-│   │   ├── manager.go        # 存储管理器
-│   │   ├── redis.go          # Redis驱动
-│   │   └── sqlite.go         # SQLite驱动
-│   └── utils/                # 工具函数
-│       └── random.go
-├── web/                      # 静态文件
-│   ├── index.html
-│   ├── favicon.ico
-│   └── logo.png
-├── scripts/                  # 构建脚本
-├── data/                     # 数据文件目录
-├── build/                    # 构建输出目录
-└── logs/                     # 日志文件目录
+├── cmd/                     # 程序入口
+│   ├── myurls/              # 主服务
+│   └── sync_data/           # 数据同步工具
+├── internal/                # 内部包
+│   ├── config/              # 配置管理
+│   ├── handler/             # HTTP处理器
+│   ├── logger/              # 日志处理
+│   ├── model/               # 数据模型
+│   ├── service/             # 业务逻辑层
+│   ├── storage/             # 存储层
+│   └── utils/               # 工具函数
+├── web/                     # 静态文件
+├── data/                    # 数据文件目录
+├── build/                   # 构建输出目录
+└── logs/                    # 日志文件目录
 ```
 
-**架构分层说明：**
+**分层说明：**
+
 - **表现层（handler）**：处理HTTP请求和响应
 - **业务层（service）**：处理核心业务逻辑
-- **存储层（storage）**：抽象存储接口，支持Redis和SQLite，并内置LRU缓存层
+- **存储层（storage）**：抽象存储接口，支持Redis和SQLite，内置LRU缓存
 - **配置层（config）**：统一配置管理
 - **工具层（utils）**：公用工具函数
 
-# Dependencies
+### 存储与缓存
 
-本服务支持两种存储方式：
+**存储支持：**
 
-1. **Redis**（推荐）：高性能缓存数据库，支持过期时间
-2. **SQLite**：嵌入式数据库，无需额外安装服务
+- **Redis**（推荐）：高性能缓存数据库，支持过期时间
+- **SQLite**：嵌入式数据库，无需额外安装服务
 
-## 存储配置
+**LRU缓存特性：**
 
-通过环境变量配置存储类型：
+- **线程安全**：支持并发访问，使用读写锁保证性能
+- **TTL支持**：支持缓存项的过期时间设置
+- **自动清理**：后台定期清理过期缓存项
+- **容量控制**：超出容量时自动清理最少使用的缓存项
+- **高性能**：基于双向链表和哈希表实现，O(1)时间复杂度
 
-```bash
-# 使用Redis（默认）
-export MYURLS_STORAGE_TYPE=redis
-export MYURLS_REDIS_CONN=localhost:6379
-export MYURLS_REDIS_PASSWORD=yourpassword
+## 快速开始
 
-# 使用SQLite
-export MYURLS_STORAGE_TYPE=sqlite
-export MYURLS_SQLITE_FILE=./data/myurls.db
+### Docker方式（推荐）
 
-# 缓存配置（可选）
-export MYURLS_CACHE_SIZE=2048 # 缓存容量，默认1024
-export MYURLS_CACHE_TTL=10m   # 缓存过期时间（支持s,m,h），默认5m
-```
+使用Docker可以快速部署，无需安装其他依赖：
 
-### Redis安装（可选）
+```shell
+# 直接运行
+docker run -d --restart always --name myurls \
+  -v ./data:/app/data \
+  -p 8080:8080 \
+  careywong/myurls:latest \
+  -domain example.com
 
-如果选择使用Redis存储，需要安装Redis服务：
-
-```shell script
-sudo apt-get update
-
-# 安装Redis
-sudo add-apt-repository ppa:chris-lea/redis-server -y 
-sudo apt-get update 
-sudo apt-get install redis-server -y 
-```
-
-## Docker 
-
-现在你可以无需安装其他服务，使用 docker 或 [docker-compose](https://docs.docker.com/compose/install/) 部署本项目。注：请自行修改 .env 中参数。
-
-```
-docker run -d --restart always --name myurls careywong/myurls:latest -domain example.com -port 8002 -conn 127.0.0.1:6379 -password ''
-```
-
-```shell script
-git clone https://github.com/CareyWang/MyUrls.git MyUrls
-
+# 使用docker-compose
+git clone https://github.com/CareyWang/MyUrls.git
 cd MyUrls
 cp .env.example .env
-
 docker-compose up -d
 ```
 
-## Install
+### 二进制文件
 
-安装项目依赖
+前往 [Actions](https://github.com/CareyWang/MyUrls/actions/workflows/go.yml) 下载对应平台的可执行文件：
 
-```shell script
+```bash
+# 基本运行
+./myurls -domain example.com -port 8080
+
+# 使用PM2守护进程
+pm2 start myurls --name myurls -- -domain example.com
+```
+
+## 安装与构建
+
+### 环境要求
+
+- Go 1.24+
+- Redis（可选，推荐）
+- SQLite（可选）
+
+### 构建项目
+
+```bash
+# 克隆项目
+git clone https://github.com/CareyWang/MyUrls.git
+cd MyUrls
+
+# 安装依赖
 make install
+
+# 构建主程序
+make default
+
+# 构建数据同步工具
+make sync_data
+
+# 构建所有平台
+make all
 ```
 
-生成可执行文件，目录位于 build/ 。默认当前平台，其他平台请参照 Makefile 或执行对应 go build 命令。
+**构建目标：**
 
-```shell script
-make
+- `make linux` - Linux AMD64
+- `make darwin` - macOS AMD64  
+- `make windows` - Windows x64
+- `make aarch64` - Linux ARM64
+
+### Redis安装（可选）
+
+如果选择使用Redis存储：
+
+```bash
+# Ubuntu/Debian
+sudo apt-get update
+sudo add-apt-repository ppa:chris-lea/redis-server -y
+sudo apt-get update
+sudo apt-get install redis-server -y
 ```
 
-## Usage
+## 配置说明
 
-前往 [Actions](https://github.com/CareyWang/MyUrls/actions/workflows/go.yml) 下载对应平台可执行文件。
+### 命令行参数
 
-### 运行参数
-
-```shell script
+```bash
 Usage of ./myurls:
-  -domain string
-        domain of the server (default "localhost:8080")
-  -h    display help
-  -port string
-        port to run the server on (default "8080")
-  -proto string
-        protocol of the server (default "https")
+  -domain string    服务域名 (default "localhost:8080")
+  -port string      监听端口 (default "8080")
+  -proto string     协议类型 (default "https")
+  -h               显示帮助
 ```
 
-### 环境变量配置
-
-除了命令行参数，还支持通过环境变量配置：
+### 环境变量
 
 ```bash
 # 服务配置
-export MYURLS_PORT=8080
-export MYURLS_DOMAIN=localhost:8080
-export MYURLS_PROTO=https
+export MYURLS_SERVER_PORT=8080
+export MYURLS_SERVER_DOMAIN=localhost:8080
+export MYURLS_SERVER_PROTO=https
 
 # 存储配置
-export MYURLS_STORAGE_TYPE=redis|sqlite
-export MYURLS_REDIS_CONN=localhost:6379
-export MYURLS_REDIS_PASSWORD=password
-export MYURLS_SQLITE_FILE=./data/myurls.db
+export MYURLS_STORAGE_TYPE=redis # redis|sqlite
+export MYURLS_STORAGE_REDIS_ADDR=localhost:6379
+export MYURLS_STORAGE_REDIS_PASSWORD=password
+export MYURLS_STORAGE_SQLITE_FILE=./data/myurls.db
 
-# 缓存配置（可选）
-export MYURLS_CACHE_SIZE=2048 # 缓存容量，默认1024
-export MYURLS_CACHE_TTL=10m   # 缓存过期时间（支持s,m,h），默认5m
+# 缓存配置
+export MYURLS_STORAGE_CACHE_ENABLED=true      # 是否启用缓存，默认true
+export MYURLS_STORAGE_CACHE_SIZE=128          # 缓存容量，默认128
+export MYURLS_STORAGE_CACHE_TTL=300           # 缓存过期时间，默认5m
 ```
 
-### 运行示例
+## 使用指南
+
+### 基本使用
 
 ```bash
 # 使用SQLite（无需额外依赖）
+export MYURLS_STORAGE_TYPE=sqlite
 ./myurls -domain example.com -port 8080
 
 # 使用Redis
 export MYURLS_STORAGE_TYPE=redis
-export MYURLS_REDIS_CONN=localhost:6379
+export MYURLS_STORAGE_REDIS_ADDR=localhost:6379
 ./myurls -domain example.com -port 8080
 ```
 
-建议配合 [pm2](https://pm2.keymetrics.io/) 开启守护进程。
+### API接口
 
-```shell script
-pm2 start myurls --name myurls -- -domain example.com
+访问 `http://your-domain:port` 即可使用Web界面创建和管理短链接。
+
+## 高级功能
+
+### 数据同步工具
+
+项目提供数据同步工具，用于在Redis和SQLite之间同步数据：
+
+```bash
+# 基本用法
+./build/sync_data -redis-addr localhost:6379 -sqlite-file ./data/myurls.db
+
+# 使用环境变量
+export SYNC_REDIS_ADDR=localhost:6379
+export SYNC_REDIS_PASSWORD=your_password
+export SYNC_SQLITE_FILE=./data/myurls.db
+./build/sync_data
+
+# 自定义批量大小
+./build/sync_data -batch-size 500
 ```
 
-### 日志清理
+**功能特性：**
 
-假定工作目录为 `/app`，可基于 logrotate 配置应用日志的自动轮转与清理。可参考示例配置，每天轮转一次日志文件，保留最近7天
+- 从Redis批量读取所有短链接数据
+- 自动保持TTL（过期时间）信息
+- 批量写入SQLite数据库
+- 支持进度显示和错误重试
 
-```shell 
+### 日志管理
+
+配置日志自动轮转和清理（假定工作目录为 `/app`）：
+
+```bash
+# 创建logrotate配置
 tee > /etc/logrotate.d/myurls <<EOF
 /app/logs/access.log {
     daily
@@ -204,64 +238,41 @@ tee > /etc/logrotate.d/myurls <<EOF
 }
 EOF
 
-# 测试是否正常工作，不会实际执行切割
+# 测试配置
 logrotate -d /etc/logrotate.d/myurls
 ```
 
-## Development
+## 开发指南
 
 ### 开发环境
 
 ```bash
-# 克隆项目
-git clone https://github.com/CareyWang/MyUrls.git
-cd MyUrls
-
 # 安装依赖
 go mod tidy
-
-# 构建项目
-make build
 
 # 运行测试
 go test ./...
 
 # 跳过Redis相关测试（如果没有Redis服务）
 SKIP_REDIS_TESTS=1 go test ./...
-```
 
-### 项目构建
-
-```bash
-# 构建当前平台可执行文件
-make default
-
-# 构建所有平台
-make all
-
-# 构建特定平台
-make linux    # Linux AMD64
-make darwin   # macOS AMD64  
-make windows  # Windows x64
-make aarch64  # Linux ARM64
-```
-
-### 代码格式化
-
-```bash
+# 格式化代码
 make fmt
+
+# 清理构建文件
+make clean
 ```
 
-## Maintainers
+### 贡献指南
+
+PRs accepted. 如果编辑README，请符合 [standard-readme](https://github.com/RichardLitt/standard-readme) 规范。
+
+## 项目信息
+
+### 维护者
 
 [@CareyWang](https://github.com/CareyWang)
 
-## Contributing
+### 许可证
 
-PRs accepted.
-
-Small note: If editing the README, please conform to the [standard-readme](https://github.com/RichardLitt/standard-readme) specification.
-
-## License
-
-MIT © 2024 CareyWang
+MIT © 2025 CareyWang

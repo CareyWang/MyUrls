@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/CareyWang/MyUrls/internal/config"
 )
@@ -15,18 +16,31 @@ func InitStorage(storageConfig *config.StorageConfig) error {
 
 	switch storageConfig.Type {
 	case config.StorageRedis:
-		storageDriver, err = NewRedisDriverWithCache(
-			storageConfig.RedisAddr,
-			storageConfig.RedisPassword,
-			storageConfig.CacheSize,
-			storageConfig.CacheTTL,
-		)
+		if storageConfig.CacheEnabled {
+			storageDriver, err = NewRedisDriverWithCache(
+				storageConfig.RedisAddr,
+				storageConfig.RedisPassword,
+				storageConfig.CacheSize,
+				time.Duration(storageConfig.CacheTTL)*time.Second,
+			)
+		} else {
+			storageDriver, err = NewRedisDriverWithoutCache(
+				storageConfig.RedisAddr,
+				storageConfig.RedisPassword,
+			)
+		}
 	case config.StorageSQLite:
-		storageDriver, err = NewSQLiteDriverWithCache(
-			storageConfig.SQLiteFile,
-			storageConfig.CacheSize,
-			storageConfig.CacheTTL,
-		)
+		if storageConfig.CacheEnabled {
+			storageDriver, err = NewSQLiteDriverWithCache(
+				storageConfig.SQLiteFile,
+				storageConfig.CacheSize,
+				time.Duration(storageConfig.CacheTTL)*time.Second,
+			)
+		} else {
+			storageDriver, err = NewSQLiteDriverWithoutCache(
+				storageConfig.SQLiteFile,
+			)
+		}
 	default:
 		return fmt.Errorf("unsupported storage type: %s", storageConfig.Type)
 	}

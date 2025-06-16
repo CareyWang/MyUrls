@@ -2,6 +2,7 @@ package storage
 
 import (
 	"context"
+	"net"
 	"os"
 	"testing"
 	"time"
@@ -10,14 +11,32 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// isRedisAvailable 检查Redis服务器是否可用
+func isRedisAvailable(addr string) bool {
+	conn, err := net.DialTimeout("tcp", addr, 2*time.Second)
+	if err != nil {
+		return false
+	}
+	conn.Close()
+	return true
+}
+
 func TestRedisDriver(t *testing.T) {
-	// 跳过Redis测试如果没有Redis服务器
+	// 跳过Redis测试如果设置了环境变量
 	if os.Getenv("SKIP_REDIS_TESTS") != "" {
-		t.Skip("Skipping Redis tests")
+		t.Skip("Skipping Redis tests due to SKIP_REDIS_TESTS env var")
 	}
 
-	driver, err := NewRedisDriver("localhost:6379", "")
-	require.NoError(t, err)
+	// 自动检测Redis是否可用
+	redisAddr := "localhost:6379"
+	if !isRedisAvailable(redisAddr) {
+		t.Skipf("Skipping Redis tests - Redis server not available at %s", redisAddr)
+	}
+
+	driver, err := NewRedisDriver(redisAddr, "")
+	if err != nil {
+		t.Skipf("Skipping Redis tests - failed to connect: %v", err)
+	}
 	defer driver.Close()
 
 	testStorageDriver(t, driver)

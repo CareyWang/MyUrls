@@ -6,6 +6,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 
+	"github.com/CareyWang/MyUrls/internal/config"
 	"github.com/CareyWang/MyUrls/internal/logger"
 	"github.com/CareyWang/MyUrls/internal/model"
 	"github.com/CareyWang/MyUrls/internal/service"
@@ -16,13 +17,18 @@ const defaultTTL = time.Hour * 24 * 365 // 默认过期时间，1年
 const defaultRenewTime = time.Hour * 48 // 默认续命时间，2天
 const defaultShortKeyLength = 7         // 默认短链接长度，7位
 
-var (
-	Proto  = "https"
-	Domain = "localhost:8080"
-)
+// URLHandler 负责处理URL相关的请求
+type URLHandler struct {
+	Config *config.Config
+}
+
+// NewURLHandler 创建一个新的URLHandler
+func NewURLHandler(cfg *config.Config) *URLHandler {
+	return &URLHandler{Config: cfg}
+}
 
 // ShortToLongHandler gets the long URL from a short URL
-func ShortToLongHandler() gin.HandlerFunc {
+func (h *URLHandler) ShortToLongHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := model.Response{}
 		shortKey := c.Param("shortKey")
@@ -52,7 +58,7 @@ type LongToShortParams struct {
 }
 
 // LongToShortHandler creates a short URL from a long URL
-func LongToShortHandler() gin.HandlerFunc {
+func (h *URLHandler) LongToShortHandler() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := model.Response{}
 
@@ -110,7 +116,7 @@ func LongToShortHandler() gin.HandlerFunc {
 			return
 		}
 
-		shortURL := Proto + "://" + Domain + "/" + options.ShortKey
+		shortURL := h.Config.Server.Proto + "://" + h.Config.Server.Domain + "/" + options.ShortKey
 
 		// 兼容以前的返回结构体
 		respDataLegacy := gin.H{

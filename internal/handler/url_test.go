@@ -20,7 +20,7 @@ import (
 	"github.com/CareyWang/MyUrls/internal/storage"
 )
 
-func setupTestEnvironment(t *testing.T) {
+func setupTestEnvironment(t *testing.T) (*URLHandler, *config.Config) {
 	// 初始化日志
 	logger.Init()
 
@@ -33,13 +33,22 @@ func setupTestEnvironment(t *testing.T) {
 	err := storage.InitStorage(storageConfig)
 	require.NoError(t, err)
 
-	// 设置测试环境的域名和协议
-	Proto = "https"
-	Domain = "test.example.com"
+	// 创建测试配置
+	cfg := &config.Config{
+		Server: config.ServerConfig{
+			Proto:  "https",
+			Domain: "test.example.com",
+		},
+	}
+
+	// 创建URLHandler实例
+	handler := NewURLHandler(cfg)
+
+	return handler, cfg
 }
 
 func TestShortToLongHandler(t *testing.T) {
-	setupTestEnvironment(t)
+	handler, _ := setupTestEnvironment(t)
 
 	// 设置Gin为测试模式
 	gin.SetMode(gin.TestMode)
@@ -82,7 +91,7 @@ func TestShortToLongHandler(t *testing.T) {
 
 			// 创建测试路由
 			router := gin.New()
-			router.GET("/:shortKey", ShortToLongHandler())
+			router.GET("/:shortKey", handler.ShortToLongHandler())
 
 			// 创建测试请求
 			req, err := http.NewRequest("GET", "/"+tt.shortKey, nil)
@@ -112,7 +121,7 @@ func TestShortToLongHandler(t *testing.T) {
 }
 
 func TestLongToShortHandler(t *testing.T) {
-	setupTestEnvironment(t)
+	handler, cfg := setupTestEnvironment(t)
 
 	// 设置Gin为测试模式
 	gin.SetMode(gin.TestMode)
@@ -185,7 +194,7 @@ func TestLongToShortHandler(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			// 创建测试路由
 			router := gin.New()
-			router.POST("/api/short", LongToShortHandler())
+			router.POST("/api/short", handler.LongToShortHandler())
 
 			var req *http.Request
 			var err error
@@ -222,7 +231,7 @@ func TestLongToShortHandler(t *testing.T) {
 				assert.Equal(t, float64(model.ResponseCodeSuccessLegacy), response["Code"])
 				shortUrl, exists := response["ShortUrl"]
 				assert.True(t, exists)
-				assert.Contains(t, shortUrl.(string), Proto+"://"+Domain+"/")
+				assert.Contains(t, shortUrl.(string), cfg.Server.Proto+"://"+cfg.Server.Domain+"/")
 			} else {
 				// 检查错误响应
 				if response["Code"] != nil {
@@ -241,14 +250,14 @@ func TestLongToShortHandler(t *testing.T) {
 }
 
 func TestLongToShortHandlerWithBase64(t *testing.T) {
-	setupTestEnvironment(t)
+	handler, cfg := setupTestEnvironment(t)
 
 	// 设置Gin为测试模式
 	gin.SetMode(gin.TestMode)
 
 	// 创建测试路由
 	router := gin.New()
-	router.POST("/api/short", LongToShortHandler())
+	router.POST("/api/short", handler.LongToShortHandler())
 
 	// 测试Base64编码的URL
 	originalUrl := "https://www.example.com/test"
@@ -281,7 +290,7 @@ func TestLongToShortHandlerWithBase64(t *testing.T) {
 
 	// 验证存储的是解码后的URL
 	shortUrl := response["ShortUrl"].(string)
-	shortKey := strings.TrimPrefix(shortUrl, Proto+"://"+Domain+"/")
+	shortKey := strings.TrimPrefix(shortUrl, cfg.Server.Proto+"://"+cfg.Server.Domain+"/")
 
 	driver := storage.GetDriver()
 	ctx := context.Background()

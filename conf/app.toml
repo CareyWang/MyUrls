@@ -1,0 +1,35 @@
+[app]
+# 应用环境: "development" 或 "production"
+environment = "production"
+
+[server]
+# 服务器运行端口
+port = "8080"
+# 服务器域名
+domain = "localhost:8080"
+# 服务器协议: "http" 或 "https"
+proto = "https"
+
+[storage]
+# 存储类型: "redis" 或 "sqlite"
+type = "redis"
+# Redis 地址
+redis_addr = "localhost:6379"
+# Redis 密码
+redis_password = ""
+# SQLite 文件路径
+sqlite_file = "./data/myurls.db"
+# 是否启用缓存
+cache_enabled = false
+# LRU 缓存大小
+cache_size = 128
+# 缓存过期时间 (单位: 秒)
+cache_ttl = 300
+
+[log]
+# 日志级别: "debug", "info", "warn", "error"
+level = "info"
+# 日志格式: "text" 或 "json"
+format = "json"
+# 日志输出: "stdout" 或 "file"
+output = "file" 

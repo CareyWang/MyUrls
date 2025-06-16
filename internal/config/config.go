@@ -2,7 +2,9 @@ package config
 
 import (
 	"os"
+	"strconv"
 	"strings"
+	"time"
 )
 
 type StorageType string
@@ -17,6 +19,8 @@ type StorageConfig struct {
 	RedisAddr     string
 	RedisPassword string
 	SQLiteFile    string
+	CacheSize     int
+	CacheTTL      time.Duration
 }
 
 func GetStorageConfig() *StorageConfig {
@@ -25,6 +29,8 @@ func GetStorageConfig() *StorageConfig {
 		RedisAddr:     "localhost:6379",
 		RedisPassword: "",
 		SQLiteFile:    "./data/myurls.db",
+		CacheSize:     1024,
+		CacheTTL:      5 * time.Minute,
 	}
 
 	// 从环境变量读取配置
@@ -42,6 +48,18 @@ func GetStorageConfig() *StorageConfig {
 
 	if sqliteFile := os.Getenv("MYURLS_SQLITE_FILE"); sqliteFile != "" {
 		config.SQLiteFile = sqliteFile
+	}
+
+	// 从环境变量中读取缓存配置
+	if cacheSizeStr := os.Getenv("MYURLS_CACHE_SIZE"); cacheSizeStr != "" {
+		if size, err := strconv.Atoi(cacheSizeStr); err == nil && size > 0 {
+			config.CacheSize = size
+		}
+	}
+	if cacheTTLStr := os.Getenv("MYURLS_CACHE_TTL"); cacheTTLStr != "" {
+		if ttl, err := time.ParseDuration(cacheTTLStr); err == nil && ttl > 0 {
+			config.CacheTTL = ttl
+		}
 	}
 
 	return config

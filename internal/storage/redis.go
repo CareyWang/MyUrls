@@ -9,32 +9,68 @@ import (
 
 type RedisDriver struct {
 	client *redis.Client
+	cache  *LRUCache
 }
 
 func NewRedisDriver(addr, password string) (*RedisDriver, error) {
+	const (
+		defaultCacheSize = 1024
+		defaultCacheTTL  = 5 * time.Minute
+	)
+	return NewRedisDriverWithCache(addr, password, defaultCacheSize, defaultCacheTTL)
+}
+
+func NewRedisDriverWithCache(addr, password string, cacheSize int, cacheTTL time.Duration) (*RedisDriver, error) {
 	client := redis.NewClient(&redis.Options{
 		Addr:     addr,
 		Password: password,
 		DB:       0,
 	})
 
-	return &RedisDriver{client: client}, nil
+	return &RedisDriver{
+		client: client,
+		cache:  NewLRUCache(cacheSize, cacheTTL),
+	}, nil
 }
 
 func (r *RedisDriver) Get(ctx context.Context, key string) (string, error) {
-	return r.client.Get(ctx, key).Result()
+	if val, ok := r.cache.Get(key); ok {
+		return val, nil
+	}
+
+	val, err := r.client.Get(ctx, key).Result()
+	if err != nil {
+		return "", err
+	}
+
+	ttl, err := r.client.TTL(ctx, key).Result()
+	if err != nil {
+		ttl = -1
+	}
+
+	r.cache.Set(key, val, ttl)
+
+	return val, nil
 }
 
 func (r *RedisDriver) SetEx(ctx context.Context, key string, value string, expiration time.Duration) error {
-	return r.client.SetEx(ctx, key, value, expiration).Err()
+	if err := r.client.SetEx(ctx, key, value, expiration).Err(); err != nil {
+		return err
+	}
+
+	r.cache.Set(key, value, expiration)
+	return nil
 }
 
 func (r *RedisDriver) Exists(ctx context.Context, key string) (bool, error) {
-	result := r.client.Exists(ctx, key)
-	if result.Err() != nil {
-		return false, result.Err()
+	if _, ok := r.cache.Get(key); ok {
+		return true, nil
 	}
-	return result.Val() > 0, nil
+	res, err := r.client.Exists(ctx, key).Result()
+	if err != nil {
+		return false, err
+	}
+	return res > 0, nil
 }
 
 func (r *RedisDriver) TTL(ctx context.Context, key string) (time.Duration, error) {
@@ -42,7 +78,15 @@ func (r *RedisDriver) TTL(ctx context.Context, key string) (time.Duration, error
 }
 
 func (r *RedisDriver) Expire(ctx context.Context, key string, expiration time.Duration) error {
-	return r.client.Expire(ctx, key, expiration).Err()
+	if err := r.client.Expire(ctx, key, expiration).Err(); err != nil {
+		return err
+	}
+
+	if val, ok := r.cache.Get(key); ok {
+		r.cache.Set(key, val, expiration)
+	}
+
+	return nil
 }
 
 func (r *RedisDriver) Ping(ctx context.Context) error {
@@ -50,5 +94,6 @@ func (r *RedisDriver) Ping(ctx context.Context) error {
 }
 
 func (r *RedisDriver) Close() error {
+	r.cache.Clear()
 	return r.client.Close()
 }

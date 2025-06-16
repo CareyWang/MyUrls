@@ -15,9 +15,18 @@ func InitStorage(storageConfig *config.StorageConfig) error {
 
 	switch storageConfig.Type {
 	case config.StorageRedis:
-		storageDriver, err = NewRedisDriver(storageConfig.RedisAddr, storageConfig.RedisPassword)
+		storageDriver, err = NewRedisDriverWithCache(
+			storageConfig.RedisAddr,
+			storageConfig.RedisPassword,
+			storageConfig.CacheSize,
+			storageConfig.CacheTTL,
+		)
 	case config.StorageSQLite:
-		storageDriver, err = NewSQLiteDriver(storageConfig.SQLiteFile)
+		storageDriver, err = NewSQLiteDriverWithCache(
+			storageConfig.SQLiteFile,
+			storageConfig.CacheSize,
+			storageConfig.CacheTTL,
+		)
 	default:
 		return fmt.Errorf("unsupported storage type: %s", storageConfig.Type)
 	}

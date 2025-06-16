@@ -37,6 +37,7 @@ MyUrls/
 │   │   └── url_test.go
 │   ├── storage/              # 存储层
 │   │   ├── interface.go      # 存储接口定义
+│   │   ├── lru.go            # LRU缓存实现
 │   │   ├── manager.go        # 存储管理器
 │   │   ├── redis.go          # Redis驱动
 │   │   └── sqlite.go         # SQLite驱动
@@ -55,7 +56,7 @@ MyUrls/
 **架构分层说明：**
 - **表现层（handler）**：处理HTTP请求和响应
 - **业务层（service）**：处理核心业务逻辑
-- **存储层（storage）**：抽象存储接口，支持Redis和SQLite
+- **存储层（storage）**：抽象存储接口，支持Redis和SQLite，并内置LRU缓存层
 - **配置层（config）**：统一配置管理
 - **工具层（utils）**：公用工具函数
 
@@ -79,6 +80,10 @@ export MYURLS_REDIS_PASSWORD=yourpassword
 # 使用SQLite
 export MYURLS_STORAGE_TYPE=sqlite
 export MYURLS_SQLITE_FILE=./data/myurls.db
+
+# 缓存配置（可选）
+export MYURLS_CACHE_SIZE=2048 # 缓存容量，默认1024
+export MYURLS_CACHE_TTL=10m   # 缓存过期时间（支持s,m,h），默认5m
 ```
 
 ### Redis安装（可选）
@@ -157,6 +162,10 @@ export MYURLS_STORAGE_TYPE=redis|sqlite
 export MYURLS_REDIS_CONN=localhost:6379
 export MYURLS_REDIS_PASSWORD=password
 export MYURLS_SQLITE_FILE=./data/myurls.db
+
+# 缓存配置（可选）
+export MYURLS_CACHE_SIZE=2048 # 缓存容量，默认1024
+export MYURLS_CACHE_TTL=10m   # 缓存过期时间（支持s,m,h），默认5m
 ```
 
 ### 运行示例

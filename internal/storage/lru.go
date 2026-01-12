@@ -115,6 +115,13 @@ func (c *LRUCache) Clear() {
 	c.cache = make(map[string]*list.Element)
 }
 
+// Size 返回缓存中的条目数量.
+func (c *LRUCache) Size() int {
+	c.mu.RLock()
+	defer c.mu.RUnlock()
+	return len(c.cache)
+}
+
 // removeOldest 删除最旧的条目.
 func (c *LRUCache) removeOldest() {
 	elem := c.ll.Back()
@@ -137,12 +144,16 @@ func (c *LRUCache) cleanupLoop(interval time.Duration) {
 
 	for range ticker.C {
 		c.mu.Lock()
-		for key, elem := range c.cache {
+		// 收集过期的元素
+		var expiredElements []*list.Element
+		for _, elem := range c.cache {
 			if elem.Value.(*entry).isExpired() {
-				c.removeElement(elem)
-				// 重新检查，因为 removeElement 修改了映射
-				delete(c.cache, key)
+				expiredElements = append(expiredElements, elem)
 			}
+		}
+		// 删除过期的元素
+		for _, elem := range expiredElements {
+			c.removeElement(elem)
 		}
 		c.mu.Unlock()
 	}

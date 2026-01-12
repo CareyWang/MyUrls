@@ -9,13 +9,15 @@ import (
 	"github.com/CareyWang/MyUrls/internal/config"
 	"github.com/CareyWang/MyUrls/internal/logger"
 	"github.com/CareyWang/MyUrls/internal/storage"
+	"github.com/CareyWang/MyUrls/internal/utils"
 )
 
 // App 包含应用的所有组件
 type App struct {
-	Config  *config.Config
-	Server  *gin.Engine
-	Storage storage.Driver
+	Config     *config.Config
+	Server     *gin.Engine
+	Storage    storage.Driver
+	CacheToken string
 }
 
 // New 创建一个新的应用实例
@@ -49,6 +51,15 @@ func (a *App) Run() error {
 		return err
 	}
 	logger.Logger.Infof("storage (%s) ping success", a.Config.Storage.Type)
+
+	// 4. 生成缓存清除token
+	token, err := utils.GenerateCacheToken()
+	if err != nil {
+		logger.Logger.Error("failed to generate cache token: ", err)
+		return err
+	}
+	a.CacheToken = token
+	logger.Logger.Infof("cache clear token generated: %s", token)
 
 	// 4. 初始化HTTP服务器
 	a.initServer()

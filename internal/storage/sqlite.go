@@ -271,6 +271,21 @@ func (s *SQLiteDriver) Close() error {
 	return sqlDB.Close()
 }
 
+func (s *SQLiteDriver) Size(ctx context.Context) (int64, error) {
+	// 统计 SQLite 数据库中的记录数量，排除过期记录
+	var count int64
+	now := time.Now().Unix()
+	err := s.db.WithContext(ctx).Model(&URLMapping{}).
+		Where("expires_at IS NULL OR expires_at > ?", now).
+		Count(&count).Error
+
+	if err != nil {
+		return 0, err
+	}
+
+	return count, nil
+}
+
 // 清理过期数据的后台任务
 func (s *SQLiteDriver) cleanupExpiredKeys() {
 	ticker := time.NewTicker(5 * time.Minute) // 每5分钟清理一次
@@ -279,5 +294,17 @@ func (s *SQLiteDriver) cleanupExpiredKeys() {
 	for range ticker.C {
 		now := time.Now().Unix()
 		s.db.Delete(&URLMapping{}, "expires_at IS NOT NULL AND expires_at < ?", now)
+	}
+}
+
+// GetLRUCache 获取LRU缓存实例
+func (s *SQLiteDriver) GetLRUCache() *LRUCache {
+	return s.cache
+}
+
+// ClearLRUCache 清空LRU缓存
+func (s *SQLiteDriver) ClearLRUCache() {
+	if s.cache != nil {
+		s.cache.Clear()
 	}
 }

@@ -27,4 +27,7 @@ type Driver interface {
 
 	// Close 关闭存储连接
 	Close() error
+
+	// Size 获取缓存大小
+	Size(ctx context.Context) (int64, error)
 }

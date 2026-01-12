@@ -57,3 +57,33 @@ func InitStorage(storageConfig *config.StorageConfig) error {
 func GetDriver() Driver {
 	return driver
 }
+
+// GetLRUCache 获取存储驱动中的LRU缓存实例
+func GetLRUCache() *LRUCache {
+	if driver == nil {
+		return nil
+	}
+
+	switch d := driver.(type) {
+	case *RedisDriver:
+		return d.GetLRUCache()
+	case *SQLiteDriver:
+		return d.GetLRUCache()
+	default:
+		return nil
+	}
+}
+
+// ClearLRUCache 清空LRU缓存
+func ClearLRUCache() {
+	if driver == nil {
+		return
+	}
+
+	switch d := driver.(type) {
+	case *RedisDriver:
+		d.ClearLRUCache()
+	case *SQLiteDriver:
+		d.ClearLRUCache()
+	}
+}

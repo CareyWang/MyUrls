@@ -121,3 +121,24 @@ func (r *RedisDriver) Close() error {
 	}
 	return r.client.Close()
 }
+
+func (r *RedisDriver) Size(ctx context.Context) (int64, error) {
+	// 返回 Redis 数据库中的键数量
+	size, err := r.client.DBSize(ctx).Result()
+	if err != nil {
+		return 0, err
+	}
+	return size, nil
+}
+
+// GetLRUCache 获取LRU缓存实例
+func (r *RedisDriver) GetLRUCache() *LRUCache {
+	return r.cache
+}
+
+// ClearLRUCache 清空LRU缓存
+func (r *RedisDriver) ClearLRUCache() {
+	if r.cache != nil {
+		r.cache.Clear()
+	}
+}

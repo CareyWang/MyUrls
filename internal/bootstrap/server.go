@@ -44,6 +44,7 @@ func (a *App) startServer() error {
 func (a *App) registerRoutes(router *gin.Engine) {
 	// 创建handler实例
 	urlHandler := handler.NewURLHandler(a.Config)
+	cacheHandler := handler.NewCacheHandler(a.CacheToken)
 
 	// 注册路由
 	router.GET("/", func(c *gin.Context) {
@@ -53,4 +54,8 @@ func (a *App) registerRoutes(router *gin.Engine) {
 	})
 	router.POST("/short", urlHandler.LongToShortHandler())
 	router.GET("/:shortKey", urlHandler.ShortToLongHandler())
+	
+	// 注册缓存管理路由
+	router.DELETE("/cache", cacheHandler.ClearCacheHandler())
+	router.GET("/cache/clear", cacheHandler.ClearCacheHandler()) // 兼容GET请求便于测试
 }

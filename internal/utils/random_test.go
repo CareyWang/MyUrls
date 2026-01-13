@@ -99,7 +99,7 @@ func TestGenerateRandomStringUniqueness(t *testing.T) {
 	generated := make(map[string]bool)
 	duplicates := 0
 
-	for i := 0; i < iterations; i++ {
+	for range iterations {
 		result := GenerateRandomString(length)
 		if generated[result] {
 			duplicates++

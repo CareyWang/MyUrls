@@ -1,6 +1,7 @@
 package config
 
 import (
+	"bytes"
 	"os"
 	"strconv"
 	"strings"
@@ -154,4 +155,22 @@ func GetConfig() *Config {
 // GetStorageConfig 为了向后兼容，保留此函数
 func GetStorageConfig() *StorageConfig {
 	return &GetConfig().Storage
+}
+
+// SaveCacheToken 保存 cache clear token 到配置文件
+func SaveCacheToken(token string) error {
+	if globalConfig == nil {
+		return nil
+	}
+	globalConfig.Cache.ClearToken = token
+
+	var buf bytes.Buffer
+	encoder := toml.NewEncoder(&buf)
+	encoder.Indent = ""
+	if err := encoder.Encode(globalConfig); err != nil {
+		return err
+	}
+
+	configPath := "conf/app.toml"
+	return os.WriteFile(configPath, buf.Bytes(), 0600)
 }

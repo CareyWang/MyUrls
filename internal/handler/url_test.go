@@ -128,7 +128,7 @@ func TestLongToShortHandler(t *testing.T) {
 
 	tests := []struct {
 		name           string
-		requestBody    interface{}
+		requestBody    any
 		contentType    string
 		expectedStatus int
 		expectSuccess  bool
@@ -222,7 +222,7 @@ func TestLongToShortHandler(t *testing.T) {
 			assert.Equal(t, tt.expectedStatus, w.Code)
 
 			// 解析响应
-			var response map[string]interface{}
+			var response map[string]any
 			err = json.Unmarshal(w.Body.Bytes(), &response)
 			require.NoError(t, err)
 
@@ -281,7 +281,7 @@ func TestLongToShortHandlerWithBase64(t *testing.T) {
 	// 检查响应
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var response map[string]interface{}
+	var response map[string]any
 	err = json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 

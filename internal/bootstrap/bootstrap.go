@@ -59,7 +59,10 @@ func (a *App) Run() error {
 		return err
 	}
 	a.CacheToken = token
-	logger.Logger.Infof("cache clear token generated: %s", token)
+	if err := config.SaveCacheToken(token); err != nil {
+		logger.Logger.Error("failed to write cache token: ", err)
+		return err
+	}
 
 	// 4. 初始化HTTP服务器
 	a.initServer()

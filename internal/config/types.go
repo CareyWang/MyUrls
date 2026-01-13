@@ -11,8 +11,10 @@ type Config struct {
 	App     AppConfig     `toml:"app"`
 	Server  ServerConfig  `toml:"server"`
 	Storage StorageConfig `toml:"storage"`
+	Cache   CacheConfig   `toml:"cache"`
 	Log     LogConfig     `toml:"log"`
 }
+
 
 type AppConfig struct {
 	Environment string `toml:"environment"`
@@ -38,4 +40,8 @@ type LogConfig struct {
 	Level  string `toml:"level"`
 	Format string `toml:"format"`
 	Output string `toml:"output"`
+}
+
+type CacheConfig struct {
+	ClearToken string `toml:"clear_token"`
 }

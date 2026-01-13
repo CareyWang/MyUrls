@@ -96,8 +96,8 @@ func getClientIP(r *http.Request) string {
 	// 检查X-Forwarded-For头
 	xff := r.Header.Get("X-Forwarded-For")
 	if xff != "" {
-		ips := strings.Split(xff, ",")
-		for _, ip := range ips {
+		ips := strings.SplitSeq(xff, ",")
+		for ip := range ips {
 			ip = strings.TrimSpace(ip)
 			if ip != "" {
 				return ip

@@ -20,11 +20,11 @@ func (l SilentLogger) LogMode(level logger.LogLevel) logger.Interface {
 	return l
 }
 
-func (l SilentLogger) Info(context.Context, string, ...interface{}) {}
+func (l SilentLogger) Info(context.Context, string, ...any) {}
 
-func (l SilentLogger) Warn(context.Context, string, ...interface{}) {}
+func (l SilentLogger) Warn(context.Context, string, ...any) {}
 
-func (l SilentLogger) Error(context.Context, string, ...interface{}) {}
+func (l SilentLogger) Error(context.Context, string, ...any) {}
 
 func (l SilentLogger) Trace(ctx context.Context, begin time.Time, fc func() (string, int64), err error) {
 }

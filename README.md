@@ -34,7 +34,7 @@ MyUrls/
 │   └── utils/               # 工具函数
 ├── web/                     # 静态文件
 ├── data/                    # 数据文件目录
-├── build/                   # 构建输出目录
+├── output/                   # 构建输出目录
 └── logs/                    # 日志文件目录
 ```
 
@@ -200,16 +200,16 @@ export MYURLS_STORAGE_REDIS_ADDR=localhost:6379
 
 ```bash
 # 基本用法
-./build/sync_data -redis-addr localhost:6379 -sqlite-file ./data/myurls.db
+./output/sync_data -redis-addr localhost:6379 -sqlite-file ./data/myurls.db
 
 # 使用环境变量
 export SYNC_REDIS_ADDR=localhost:6379
 export SYNC_REDIS_PASSWORD=your_password
 export SYNC_SQLITE_FILE=./data/myurls.db
-./build/sync_data
+./output/sync_data
 
 # 自定义批量大小
-./build/sync_data -batch-size 500
+./output/sync_data -batch-size 500
 ```
 
 **功能特性：**

@@ -10,6 +10,7 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=build /app/myurls ./
 COPY web/* ./web/
+COPY conf/* ./conf/
 
 ENV MYURLS_STORAGE_TYPE=redis
 

@@ -25,7 +25,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: myurls-linux-amd64
-          path: build/myurls-linux-amd64.tar.gz
+          path: output/myurls-linux-amd64.tar.gz
 
   linux_arm64_build:
     name: Linux arm64 build
@@ -47,7 +47,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: myurls-linux-arm64
-          path: build/myurls-linux-arm64.tar.gz
+          path: output/myurls-linux-arm64.tar.gz
 
   # darwin_amd64_build:
   #   name: Darwin amd64 build
@@ -68,7 +68,7 @@ jobs:
   #       uses: actions/upload-artifact@v4
   #       with:
   #         name: myurls-darwin-amd64.tar.gz
-  #         path: build/myurls-darwin-amd64.tar.gz
+  #         path: output/myurls-darwin-amd64.tar.gz
 
   windows_x64_build:
     name: Windows x64 build
@@ -89,4 +89,4 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: myurls-windows-x64.tar.gz
-          path: build/myurls-windows-x64.tar.gz
+          path: output/myurls-windows-x64.tar.gz

@@ -15,7 +15,7 @@ Go-based local URL shortener with Redis/SQLite backends, Gin HTTP layer, and an 
 ├── conf/                # TOML config (app.toml)
 ├── web/                 # Static web UI assets
 ├── scripts/             # Build scripts per platform
-├── build/               # Build outputs
+├── output/              # Build outputs
 ├── data/                # SQLite/db runtime data
 └── logs/                # Runtime logs
 ```

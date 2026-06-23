@@ -4,6 +4,7 @@ output/
 logs/
 data/
 *.log
+conf/cache_token
 
 .env
 dist/

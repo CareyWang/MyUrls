@@ -1,13 +1,17 @@
 package config
 
 import (
-	"bytes"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/BurntSushi/toml"
 )
+
+// cacheTokenFile 缓存清除 token 的持久化路径
+// 仅写入 token 本身，不回写完整配置，避免敏感配置（如 redis 密码）落盘
+const cacheTokenFile = "conf/cache_token"
 
 var globalConfig *Config
 
@@ -157,20 +161,18 @@ func GetStorageConfig() *StorageConfig {
 	return &GetConfig().Storage
 }
 
-// SaveCacheToken 保存 cache clear token 到配置文件
+// SaveCacheToken 将 cache clear token 写入独立文件，便于运维查看
+// 仅持久化 token 本身，不回写完整配置，避免泄露敏感配置（如 redis 密码）
 func SaveCacheToken(token string) error {
 	if globalConfig == nil {
 		return nil
 	}
 	globalConfig.Cache.ClearToken = token
 
-	var buf bytes.Buffer
-	encoder := toml.NewEncoder(&buf)
-	encoder.Indent = ""
-	if err := encoder.Encode(globalConfig); err != nil {
+	dir := filepath.Dir(cacheTokenFile)
+	if err := os.MkdirAll(dir, 0755); err != nil {
 		return err
 	}
 
-	configPath := "conf/app.toml"
-	return os.WriteFile(configPath, buf.Bytes(), 0600)
+	return os.WriteFile(cacheTokenFile, []byte(token), 0600)
 }

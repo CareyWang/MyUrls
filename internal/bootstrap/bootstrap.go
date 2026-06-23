@@ -59,9 +59,10 @@ func (a *App) Run() error {
 		return err
 	}
 	a.CacheToken = token
+	logger.Logger.Infof("cache clear token: %s", token)
+	// 持久化失败不应阻断服务启动（例如只读文件系统场景），仅记录警告
 	if err := config.SaveCacheToken(token); err != nil {
-		logger.Logger.Error("failed to write cache token: ", err)
-		return err
+		logger.Logger.Warn("failed to persist cache token to file: ", err)
 	}
 
 	// 4. 初始化HTTP服务器

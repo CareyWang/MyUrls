@@ -3,7 +3,6 @@ package handler
 import (
 	"net"
 	"net/http"
-	"strings"
 
 	"github.com/CareyWang/MyUrls/internal/model"
 	"github.com/CareyWang/MyUrls/internal/storage"
@@ -73,45 +72,26 @@ func (h *CacheHandler) ClearCacheHandler() gin.HandlerFunc {
 }
 
 // isLocalhost 检查请求是否来自本地主机
+//
+// 故意不信任 X-Forwarded-For / X-Real-IP 等请求头：这些头由客户端自行设置，
+// 攻击者可伪造为 127.0.0.1 绕过校验，因此只依据 TCP 连接的真实来源 RemoteAddr 判断。
 func isLocalhost(r *http.Request) bool {
 	ip := getClientIP(r)
 
-	// 检查常见的本地地址
 	if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
 		return true
 	}
 
-	// 解析IP地址
 	parsedIP := net.ParseIP(ip)
 	if parsedIP != nil {
-		// 检查是否为环回地址
 		return parsedIP.IsLoopback()
 	}
 
 	return false
 }
 
-// getClientIP 获取客户端真实IP
+// getClientIP 获取 TCP 连接的真实来源地址
 func getClientIP(r *http.Request) string {
-	// 检查X-Forwarded-For头
-	xff := r.Header.Get("X-Forwarded-For")
-	if xff != "" {
-		ips := strings.SplitSeq(xff, ",")
-		for ip := range ips {
-			ip = strings.TrimSpace(ip)
-			if ip != "" {
-				return ip
-			}
-		}
-	}
-
-	// 检查X-Real-IP头
-	xri := r.Header.Get("X-Real-IP")
-	if xri != "" {
-		return xri
-	}
-
-	// 直接从RemoteAddr获取
 	host, _, err := net.SplitHostPort(r.RemoteAddr)
 	if err != nil {
 		return r.RemoteAddr

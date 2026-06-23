@@ -5,13 +5,15 @@ services:
     container_name: myurls
     restart: always
     env_file: .env
+    environment:
+      MYURLS_STORAGE_REDIS_ADDR: myurls-redis:6379
     ports:
       - "${MYURLS_SERVER_PORT}:${MYURLS_SERVER_PORT}"
     volumes:
-      - ./data/myurls/logs:/app/logs      
+      - ./data/myurls/logs:/app/logs
+      - ./conf:/app/conf
     depends_on:
       - myurls-redis
-    entrypoint: ["/app/myurls", "-domain", "${MYURLS_SERVER_DOMAIN}", "-conn", myurls-redis:6379]
 
   myurls-redis:
     image: "redis:7"

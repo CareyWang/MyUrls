@@ -1,28 +1,26 @@
 package utils
 
 import (
-	"math/rand"
-	"time"
+	"crypto/rand"
+	"math/big"
 )
 
 const letterBytes = "0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 
-// GenerateRandomString is a function that takes an integer bits and returns a string.
-// The function generates a random string of length equal to bits using the letterBytes slice.
-// The letterBytes slice contains characters that can be used to generate a random string.
-// The generation of the random string is based on the current time using the UnixNano() function.
+// GenerateRandomString 生成长度为 bits 的随机字符串，字符取自 letterBytes。
+// 使用 crypto/rand 而非 math/rand：math/rand 按纳秒时间播种，高并发下可能在同一纳秒内
+// 重复播种导致生成相同的序列（短链key可预测/碰撞），crypto/rand 不存在该问题。
 func GenerateRandomString(bits int) string {
-	// Create a byte slice b of length bits.
 	b := make([]byte, bits)
+	max := big.NewInt(int64(len(letterBytes)))
 
-	// Create a new random number generator with the current time as the seed.
-	r := rand.New(rand.NewSource(time.Now().UnixNano()))
-
-	// Generate a random byte for each element in the byte slice b using the letterBytes slice.
 	for i := range b {
-		b[i] = letterBytes[r.Intn(len(letterBytes))]
+		n, err := rand.Int(rand.Reader, max)
+		if err != nil {
+			panic(err)
+		}
+		b[i] = letterBytes[n.Int64()]
 	}
 
-	// Convert the byte slice to a string and return it.
 	return string(b)
 }

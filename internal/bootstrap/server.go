@@ -11,14 +11,10 @@ import (
 )
 
 // initServer 初始化HTTP服务器
+//
+// Gin 模式已在 bootstrap.go::Run() 中根据 environment 统一设置，这里不再重复设置，
+// 避免出现与 Run() 矛盾的判断逻辑。
 func (a *App) initServer() {
-	// 设置 Gin 模式
-	if a.Config.App.Environment == "production" {
-		gin.SetMode(gin.ReleaseMode)
-	} else {
-		gin.SetMode(gin.DebugMode)
-	}
-
 	router := gin.Default()
 
 	// 注册中间件

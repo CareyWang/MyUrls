@@ -12,4 +12,5 @@ const (
 	ResponseCodeSuccessLegacy    = 1    // Success
 	ResponseCodeParamsCheckError = 1001 // Parameter check error
 	ResponseCodeServerError      = 1002 // Server error
+	ResponseCodeTooManyRequests  = 1003 // Too many requests
 )

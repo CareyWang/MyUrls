@@ -13,6 +13,9 @@ type Driver interface {
 	// SetEx 设置key-value对，带过期时间
 	SetEx(ctx context.Context, key string, value string, expiration time.Duration) error
 
+	// SetNXEx 仅当key不存在（或已过期）时设置值，返回是否实际写入
+	SetNXEx(ctx context.Context, key string, value string, expiration time.Duration) (bool, error)
+
 	// Exists 检查key是否存在
 	Exists(ctx context.Context, key string) (bool, error)
 

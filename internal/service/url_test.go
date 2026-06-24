@@ -152,6 +152,36 @@ func TestCheckKeyExists(t *testing.T) {
 	assert.True(t, exists)
 }
 
+func TestCreateShort(t *testing.T) {
+	cleanup, _ := setupTestStorage(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// 自定义key：首次创建应成功
+	shortKey, err := CreateShort(ctx, "customkey", "https://example.com/custom", 60*time.Second, 7)
+	require.NoError(t, err)
+	assert.Equal(t, "customkey", shortKey)
+
+	result := ShortToLong(ctx, "customkey")
+	assert.Equal(t, "https://example.com/custom", result)
+
+	// 自定义key：再次创建相同key应返回ErrShortKeyExists，且不覆盖原值
+	_, err = CreateShort(ctx, "customkey", "https://example.com/overwrite-attempt", 60*time.Second, 7)
+	assert.ErrorIs(t, err, ErrShortKeyExists)
+
+	result = ShortToLong(ctx, "customkey")
+	assert.Equal(t, "https://example.com/custom", result)
+
+	// 空key：应自动生成一个指定长度的key
+	autoKey, err := CreateShort(ctx, "", "https://example.com/auto", 60*time.Second, 7)
+	require.NoError(t, err)
+	assert.Len(t, autoKey, 7)
+
+	result = ShortToLong(ctx, autoKey)
+	assert.Equal(t, "https://example.com/auto", result)
+}
+
 func TestServiceIntegration(t *testing.T) {
 	cleanup, _ := setupTestStorage(t)
 	defer cleanup()

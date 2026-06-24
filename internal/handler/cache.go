@@ -6,6 +6,7 @@ import (
 
 	"github.com/CareyWang/MyUrls/internal/model"
 	"github.com/CareyWang/MyUrls/internal/storage"
+	"github.com/CareyWang/MyUrls/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -76,7 +77,7 @@ func (h *CacheHandler) ClearCacheHandler() gin.HandlerFunc {
 // 故意不信任 X-Forwarded-For / X-Real-IP 等请求头：这些头由客户端自行设置，
 // 攻击者可伪造为 127.0.0.1 绕过校验，因此只依据 TCP 连接的真实来源 RemoteAddr 判断。
 func isLocalhost(r *http.Request) bool {
-	ip := getClientIP(r)
+	ip := utils.GetClientIP(r)
 
 	if ip == "127.0.0.1" || ip == "::1" || ip == "localhost" {
 		return true
@@ -88,13 +89,4 @@ func isLocalhost(r *http.Request) bool {
 	}
 
 	return false
-}
-
-// getClientIP 获取 TCP 连接的真实来源地址
-func getClientIP(r *http.Request) string {
-	host, _, err := net.SplitHostPort(r.RemoteAddr)
-	if err != nil {
-		return r.RemoteAddr
-	}
-	return host
 }

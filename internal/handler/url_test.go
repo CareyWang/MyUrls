@@ -71,7 +71,7 @@ func TestShortToLongHandler(t *testing.T) {
 				err := driver.SetEx(ctx, "test123", "https://www.google.com", 3600*time.Second)
 				require.NoError(t, err)
 			},
-			expectedStatus:   http.StatusMovedPermanently,
+			expectedStatus:   http.StatusFound,
 			expectedRedirect: "https://www.google.com",
 			expectError:      false,
 		},

@@ -80,6 +80,20 @@ func (r *RedisDriver) SetEx(ctx context.Context, key string, value string, expir
 	return nil
 }
 
+func (r *RedisDriver) SetNXEx(ctx context.Context, key string, value string, expiration time.Duration) (bool, error) {
+	// SET key value EX seconds NX 是单命令原子操作；Redis会自动清理过期key，
+	// 因此该调用天然满足"key不存在或已过期时才写入"的语义
+	ok, err := r.client.SetNX(ctx, key, value, expiration).Result()
+	if err != nil {
+		return false, err
+	}
+
+	if ok && r.cache != nil {
+		r.cache.Set(key, value, expiration)
+	}
+	return ok, nil
+}
+
 func (r *RedisDriver) Exists(ctx context.Context, key string) (bool, error) {
 	if r.cache != nil {
 		if _, ok := r.cache.Get(key); ok {

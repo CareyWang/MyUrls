@@ -18,12 +18,12 @@ Run() executes components in order:
 7. Start HTTP server on configured port
 
 ### CONVENTIONS
-- Gin mode set in Run() and again in initServer()
+- Gin mode set once in Run(), before initServer() runs
 - gin.ReleaseMode unless environment == "development"
 - HTTP server uses gin.Default() with service logger middleware
 - HTML templates loaded from web/*.html, static logo at web/logo.png
 - Handlers instantiated with config or cache token during route registration
-- Routes registered: / (index), POST /short, GET /:shortKey, DELETE /cache, GET /cache/clear
+- Routes registered: / (index), POST /short (rate-limited), GET /:shortKey, DELETE /cache, GET /cache/clear
 - Storage driver accessible via App.Storage after initialization
 - Cache token logged for debugging purposes
 

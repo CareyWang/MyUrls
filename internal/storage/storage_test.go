@@ -123,6 +123,40 @@ func testStorageDriver(t *testing.T, driver Driver) {
 
 	// 清理测试数据
 	// 注意：这里可能需要根据具体实现来清理
+
+	// 测试SetNXEx：新key应写入成功
+	nxKey := "nx_key_" + time.Now().Format("20060102150405")
+	ok, err := driver.SetNXEx(ctx, nxKey, "nx_value_1", 60*time.Second)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	result, err = driver.Get(ctx, nxKey)
+	assert.NoError(t, err)
+	assert.Equal(t, "nx_value_1", result)
+
+	// 测试SetNXEx：已存在且未过期的key不应被覆盖
+	ok, err = driver.SetNXEx(ctx, nxKey, "nx_value_2", 60*time.Second)
+	assert.NoError(t, err)
+	assert.False(t, ok)
+
+	result, err = driver.Get(ctx, nxKey)
+	assert.NoError(t, err)
+	assert.Equal(t, "nx_value_1", result)
+
+	// 测试SetNXEx：已过期的key可被重新占用
+	nxExpiredKey := "nx_expired_key"
+	err = driver.SetEx(ctx, nxExpiredKey, "old_value", 2*time.Second)
+	assert.NoError(t, err)
+
+	time.Sleep(3 * time.Second)
+
+	ok, err = driver.SetNXEx(ctx, nxExpiredKey, "new_value", 60*time.Second)
+	assert.NoError(t, err)
+	assert.True(t, ok)
+
+	result, err = driver.Get(ctx, nxExpiredKey)
+	assert.NoError(t, err)
+	assert.Equal(t, "new_value", result)
 }
 
 func TestStorageDriverInterface(t *testing.T) {

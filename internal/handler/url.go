@@ -2,6 +2,8 @@ package handler
 
 import (
 	"encoding/base64"
+	"errors"
+	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -48,7 +50,9 @@ func (h *URLHandler) ShortToLongHandler() gin.HandlerFunc {
 		// 	logger.Logger.Warn("failed to renew short URL: ", err.Error())
 		// }
 
-		c.Redirect(301, longURL)
+		// 302临时重定向：短链有TTL过期机制，若使用301浏览器会永久缓存跳转目标，
+		// 导致key过期或被复用后客户端仍跳转到旧地址
+		c.Redirect(http.StatusFound, longURL)
 	}
 }
 
@@ -79,44 +83,34 @@ func (h *URLHandler) LongToShortHandler() gin.HandlerFunc {
 			req.LongUrl = string(_longUrl)
 		}
 
-		// generate short key
-		if req.ShortKey == "" {
-			req.ShortKey = utils.GenerateRandomString(defaultShortKeyLength)
-		}
-		// check whether short key exists
-		exists, err := service.CheckKeyExists(c, req.ShortKey)
-		if err != nil {
-			resp.Code = model.ResponseCodeServerError
-			resp.Msg = "failed to check short key"
-			logger.Logger.Error("failed to check short key: ", err.Error())
-
-			c.JSON(200, resp)
-			return
-		}
-		if exists {
+		// 校验长链接，拒绝 javascript:/data: 等危险scheme，避免服务被用作钓鱼/开放重定向跳板
+		if err := utils.ValidateLongURL(req.LongUrl); err != nil {
 			resp.Code = model.ResponseCodeParamsCheckError
-			resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"
-
-			logger.Logger.Info("short key already exists: ", req.ShortKey)
-			c.JSON(200, resp)
-			return
-		}
-
-		options := &service.LongToShortOptions{
-			ShortKey:   req.ShortKey,
-			URL:        req.LongUrl,
-			Expiration: defaultTTL,
-		}
-		if err := service.LongToShort(c, options); err != nil {
-			resp.Code = model.ResponseCodeServerError
-			resp.Msg = "failed to create short URL"
-			logger.Logger.Warn("failed to create short URL: ", err.Error())
+			resp.Msg = "invalid long url: " + err.Error()
+			logger.Logger.Warn("invalid long url: ", err.Error())
 
 			c.JSON(200, resp)
 			return
 		}
 
-		shortURL := h.Config.Server.Proto + "://" + h.Config.Server.Domain + "/" + options.ShortKey
+		// 原子地创建短链：key存在性检查与写入在存储层合并为单次操作，避免并发下的竞态覆盖
+		shortKey, err := service.CreateShort(c, req.ShortKey, req.LongUrl, defaultTTL, defaultShortKeyLength)
+		if err != nil {
+			if errors.Is(err, service.ErrShortKeyExists) {
+				resp.Code = model.ResponseCodeParamsCheckError
+				resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"
+				logger.Logger.Info("short key already exists: ", req.ShortKey)
+			} else {
+				resp.Code = model.ResponseCodeServerError
+				resp.Msg = "failed to create short URL"
+				logger.Logger.Warn("failed to create short URL: ", err.Error())
+			}
+
+			c.JSON(200, resp)
+			return
+		}
+
+		shortURL := h.Config.Server.Proto + "://" + h.Config.Server.Domain + "/" + shortKey
 
 		// 兼容以前的返回结构体
 		respDataLegacy := gin.H{

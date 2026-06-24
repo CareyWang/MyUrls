@@ -141,8 +141,8 @@ func (s *SQLiteDriver) Get(ctx context.Context, key string) (string, error) {
 
 	// 3. 检查是否过期
 	if mapping.ExpiresAt != nil && time.Now().Unix() > *mapping.ExpiresAt {
-		// 异步删除过期的key
-		go s.db.WithContext(ctx).Delete(&URLMapping{}, "key = ?", key)
+		// 异步删除过期的key；使用独立的context，避免请求结束后ctx被取消导致删除静默失败
+		go s.db.WithContext(context.Background()).Delete(&URLMapping{}, "key = ?", key)
 		return "", fmt.Errorf("redis: nil") // 模拟Redis的行为
 	}
 
@@ -178,6 +178,28 @@ func (s *SQLiteDriver) SetEx(ctx context.Context, key string, value string, expi
 	return nil
 }
 
+// SetNXEx 仅当key不存在或已过期时写入，通过条件 upsert 在数据库层面保证原子性
+func (s *SQLiteDriver) SetNXEx(ctx context.Context, key string, value string, expiration time.Duration) (bool, error) {
+	now := time.Now()
+	expiresAt := now.Add(expiration).Unix()
+
+	result := s.db.WithContext(ctx).Exec(
+		`INSERT INTO url_mappings (key, value, expires_at, created_at) VALUES (?, ?, ?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, created_at = excluded.created_at
+		WHERE url_mappings.expires_at IS NOT NULL AND url_mappings.expires_at < ?`,
+		key, value, &expiresAt, now.Unix(), now.Unix(),
+	)
+	if result.Error != nil {
+		return false, result.Error
+	}
+
+	written := result.RowsAffected > 0
+	if written && s.cache != nil {
+		s.cache.Set(key, value, expiration)
+	}
+	return written, nil
+}
+
 func (s *SQLiteDriver) Exists(ctx context.Context, key string) (bool, error) {
 	// 1. 先检查缓存（如果缓存启用）
 	if s.cache != nil {
@@ -199,8 +221,8 @@ func (s *SQLiteDriver) Exists(ctx context.Context, key string) (bool, error) {
 
 	// 3. 检查是否过期
 	if mapping.ExpiresAt != nil && time.Now().Unix() > *mapping.ExpiresAt {
-		// 异步删除过期的key
-		go s.db.WithContext(ctx).Delete(&URLMapping{}, "key = ?", key)
+		// 异步删除过期的key；使用独立的context，避免请求结束后ctx被取消导致删除静默失败
+		go s.db.WithContext(context.Background()).Delete(&URLMapping{}, "key = ?", key)
 		return false, nil
 	}
 

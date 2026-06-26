@@ -93,6 +93,16 @@ func (h *URLHandler) LongToShortHandler() gin.HandlerFunc {
 			return
 		}
 
+		// 校验自定义短链接key，字符集与自动生成key一致，长度不超过32位
+		if err := utils.ValidateShortKey(req.ShortKey); err != nil {
+			resp.Code = model.ResponseCodeParamsCheckError
+			resp.Msg = "invalid short key: " + err.Error()
+			logger.Logger.Warn("invalid short key: ", err.Error())
+
+			c.JSON(200, resp)
+			return
+		}
+
 		// 原子地创建短链：key存在性检查与写入在存储层合并为单次操作，避免并发下的竞态覆盖
 		shortKey, err := service.CreateShort(c, req.ShortKey, req.LongUrl, defaultTTL, defaultShortKeyLength)
 		if err != nil {

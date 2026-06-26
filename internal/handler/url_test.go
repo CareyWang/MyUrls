@@ -162,6 +162,28 @@ func TestLongToShortHandler(t *testing.T) {
 			expectSuccess:  true,
 		},
 		{
+			name: "invalid custom short key with hyphen",
+			requestBody: LongToShortParams{
+				LongUrl:  "https://www.example.com/invalid-key",
+				ShortKey: "abc-def",
+			},
+			contentType:    "application/json",
+			expectedStatus: http.StatusOK,
+			expectSuccess:  false,
+			expectedError:  "invalid short key",
+		},
+		{
+			name: "invalid custom short key longer than 32",
+			requestBody: LongToShortParams{
+				LongUrl:  "https://www.example.com/invalid-key-length",
+				ShortKey: "0123456789abcdefghijklmnopqrstuvw",
+			},
+			contentType:    "application/json",
+			expectedStatus: http.StatusOK,
+			expectSuccess:  false,
+			expectedError:  "invalid short key",
+		},
+		{
 			name: "missing required parameter",
 			requestBody: LongToShortParams{
 				ShortKey: "test",

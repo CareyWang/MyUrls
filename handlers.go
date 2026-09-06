@@ -2,14 +2,13 @@ package main
 
 import (
 	"encoding/base64"
+	"errors"
 	"time"
 
 	"github.com/gin-gonic/gin"
 )
 
-const defaultTTL = time.Hour * 24 * 365 // 默认过期时间，1年
 const defaultRenewTime = time.Hour * 48 // 默认续命时间，2天
-const defaultShortKeyLength = 7         // 默认短链接长度，7位
 
 // ShortToLongHandler gets the long URL from a short URL
 func ShortToLongHandler() gin.HandlerFunc {
@@ -42,7 +41,7 @@ type LongToShortParams struct {
 }
 
 // LongToShortHandler creates a short URL from a long URL
-func LongToShortHandler() gin.HandlerFunc {
+func LongToShortHandler(creator *shortURLCreator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := Response{}
 
@@ -63,21 +62,8 @@ func LongToShortHandler() gin.HandlerFunc {
 			req.LongUrl = string(_longUrl)
 		}
 
-		// generate short key
-		if req.ShortKey == "" {
-			req.ShortKey = GenerateRandomString(defaultShortKeyLength)
-		}
-		// check whether short key exists
-		exists, err := CheckRedisKeyIfExist(c, req.ShortKey)
-		if err != nil {
-			resp.Code = ResponseCodeServerError
-			resp.Msg = "failed to check short key"
-			logger.Error("failed to check short key: ", err.Error())
-
-			c.JSON(200, resp)
-			return
-		}
-		if exists {
+		shortKey, err := creator.Create(c.Request.Context(), req.LongUrl, req.ShortKey)
+		if errors.Is(err, errShortKeyExists) {
 			resp.Code = ResponseCodeParamsCheckError
 			resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"
 
@@ -86,12 +72,7 @@ func LongToShortHandler() gin.HandlerFunc {
 			return
 		}
 
-		options := &LongToShortOptions{
-			ShortKey:   req.ShortKey,
-			URL:        req.LongUrl,
-			expiration: defaultTTL,
-		}
-		if err := LongToShort(c, options); err != nil {
+		if err != nil {
 			resp.Code = ResponseCodeServerError
 			resp.Msg = "failed to create short URL"
 			logger.Warn("failed to create short URL: ", err.Error())
@@ -100,7 +81,7 @@ func LongToShortHandler() gin.HandlerFunc {
 			return
 		}
 
-		shortURL := proto + "://" + domain + "/" + options.ShortKey
+		shortURL := proto + "://" + domain + "/" + shortKey
 
 		// 兼容以前的返回结构体
 		respDataLegacy := gin.H{

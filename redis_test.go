@@ -1,41 +1,27 @@
 package main
 
 import (
-	"context"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/redis/go-redis/v9"
-	"github.com/stretchr/testify/assert"
 )
 
-var mockRedisOptions = &redis.Options{
-	Addr:     "localhost:6379",
-	Password: "",
-	DB:       0,
+func newTestRedis(t testing.TB) (*miniredis.Miniredis, *redis.Client) {
+	t.Helper()
+	server := miniredis.RunT(t)
+	client := redis.NewClient(&redis.Options{Addr: server.Addr()})
+	t.Cleanup(func() { client.Close() })
+	return server, client
 }
 
-func TestGetRedisClient(t *testing.T) {
-	client := GetRedisClient()
-	assert.Nil(t, client)
-
-	initRedisClient(mockRedisOptions)
-	client = GetRedisClient()
-	assert.NotNil(t, client)
-
-	// Test redis exec commands and response
-	ctx := context.Background()
-	rs := client.Ping(ctx)
-	assert.Nil(t, rs.Err())
-	assert.Equal(t, "PONG", rs.Val())
-
-	rsCmd := GetRedisClient().Do(ctx, "dbsize")
-	assert.Nil(t, rsCmd.Err())
-}
-
-func BenchmarkGetRedisClient(b *testing.B) {
-	initRedisClient(mockRedisOptions)
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		GetRedisClient().Get(context.Background(), "key")
-	}
+func newTestCreator(t testing.TB, client *redis.Client) *shortURLCreator {
+	t.Helper()
+	creator := newShortURLCreator(client.Options())
+	t.Cleanup(func() {
+		if err := creator.Close(); err != nil {
+			t.Errorf("close short URL creator: %v", err)
+		}
+	})
+	return creator
 }

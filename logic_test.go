@@ -1,31 +1,21 @@
-// FILEPATH: /root/CareyWang/MyUrls/logic_test.go
-
 package main
 
 import (
 	"context"
 	"testing"
-	"time"
 
-	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
-func TestLongToShortAndShortToLong(t *testing.T) {
-	ctx := context.Background()
-	initRedisClient(mockRedisOptions)
+func TestCreatedShortURLResolves(t *testing.T) {
+	_, client := newTestRedis(t)
+	previousClient := RedisClient
+	RedisClient = client
+	t.Cleanup(func() { RedisClient = previousClient })
 
-	shortKey := "testKey"
-	longURL := "https://example.com"
-
-	err := LongToShort(ctx, &LongToShortOptions{
-		ShortKey:   shortKey,
-		URL:        longURL,
-		expiration: 60 * time.Second,
-	})
-	assert.NoError(t, err)
-	// delete test data from redis
-	defer GetRedisClient().Del(ctx, shortKey)
-
-	resultLongURL := ShortToLong(ctx, shortKey)
-	assert.Equal(t, longURL, resultLongURL)
+	creator := newTestCreator(t, client)
+	key, err := creator.Create(context.Background(), "https://example.com", "testKey")
+	require.NoError(t, err)
+	require.Equal(t, "https://example.com", ShortToLong(context.Background(), key))
+	require.Empty(t, ShortToLong(context.Background(), "missing"))
 }

@@ -104,7 +104,9 @@ func run() {
 		})
 	})
 
-	router.POST("/short", LongToShortHandler())
+	creator := newShortURLCreator(GetRedisClient().Options())
+	defer creator.Close()
+	router.POST("/short", LongToShortHandler(creator))
 	router.GET("/:shortKey", ShortToLongHandler())
 
 	logger.Infof("server running on :%s", port)

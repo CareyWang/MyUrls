@@ -1,8 +1,6 @@
 module github.com/CareyWang/MyUrls
 
-go 1.24
-
-toolchain go1.24.3
+go 1.26.0
 
 require (
 	github.com/gin-gonic/gin v1.10.1

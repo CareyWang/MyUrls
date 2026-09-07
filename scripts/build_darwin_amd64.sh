@@ -4,7 +4,6 @@ make install
 make all
 
 mkdir -p myurls
-cp -r public myurls/
 
 # darwin-amd64
 cp build/myurls-darwin-amd64 myurls/

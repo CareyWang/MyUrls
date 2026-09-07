@@ -4,7 +4,6 @@ make install
 make all
 
 mkdir -p myurls
-cp -r public myurls/
 
 # windows-x64
 cp build/myurls-windows-x64 myurls/

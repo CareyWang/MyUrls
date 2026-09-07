@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"net/http"
 	"os"
 
 	"github.com/gin-gonic/gin"
@@ -94,15 +93,7 @@ func run() {
 	// logger
 	router.Use(initServiceLogger())
 
-	// static files
-	router.LoadHTMLGlob("public/*.html")
-	router.StaticFile("/logo.png", "public/logo.png")
-
-	router.GET("/", func(context *gin.Context) {
-		context.HTML(http.StatusOK, "index.html", gin.H{
-			"title": "MyUrls",
-		})
-	})
+	registerPublicRoutes(router)
 
 	creator := newShortURLCreator(GetRedisClient().Options())
 	defer creator.Close()

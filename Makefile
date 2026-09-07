@@ -15,10 +15,10 @@ default:
 all:
 	@echo ${BINARY_LINUX}
 	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX}
-	# @echo ${BINARY_DARWIN}
-	# @CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
-	# @echo ${BINARY_DARWIN_ARM64}
-	# @CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
+	@echo ${BINARY_DARWIN}
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
+	@echo ${BINARY_DARWIN_ARM64}
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
 	@echo ${BINARY_WINDOWS}
 	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS}
 	@echo ${BINARY_ARM64}
@@ -31,6 +31,10 @@ linux:
 darwin:
 	@echo ${BINARY_DARWIN}
 	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
+
+darwin-arm64:
+	@echo ${BINARY_DARWIN_ARM64}
+	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
 
 windows:
 	@echo ${BINARY_WINDOWS}

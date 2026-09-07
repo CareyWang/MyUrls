@@ -4,7 +4,6 @@ make install
 make all
 
 mkdir -p myurls
-cp -r public myurls/
 
 # linux-amd64
 cp build/myurls-linux-amd64 myurls/

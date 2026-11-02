@@ -135,8 +135,8 @@ MyUrls 支持通过命令行参数或环境变量进行配置。当两者同时�
 
 | 参数名 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `longUrl` | string | 是 | 长链接。支持明文 URL 或 Base64 编码格式 |
-| `shortKey` | string | 否 | 用户指定的短键。若留空，系统自动生成 7 位随机字符串 |
+| `longUrl` | string | 是 | 长链接。必须是带主机名的 `http` 或 `https` URL，支持明文或 Base64 编码格式 |
+| `shortKey` | string | 否 | 用户指定的短键，只能包含字母、数字、`-` 和 `_`。若留空，系统自动生成 7 位随机字符串 |
 
 #### 请求示例
 
@@ -168,6 +168,26 @@ curl -X POST https://example.com/short \
   {
     "Code": 1001,
     "Message": "invalid parameters",
+    "Data": null
+  }
+  ```
+
+- **长链接无效**：
+
+  ```json
+  {
+    "Code": 1001,
+    "Message": "invalid long URL, only http and https URLs are supported",
+    "Data": null
+  }
+  ```
+
+- **短键无效**：
+
+  ```json
+  {
+    "Code": 1001,
+    "Message": "invalid short key, only letters, digits, hyphens, and underscores are allowed",
     "Data": null
   }
   ```
@@ -208,6 +228,16 @@ curl -X POST https://example.com/short \
   {
     "Code": 1002,
     "Message": "failed to get long URL, please check the short URL if exists or expired",
+    "Data": null
+  }
+  ```
+
+- **服务端错误**（Redis 读取失败）：返回 HTTP 状态码 `500 Internal Server Error` 及 JSON 错误信息：
+
+  ```json
+  {
+    "Code": 1002,
+    "Message": "failed to get long URL",
     "Data": null
   }
   ```

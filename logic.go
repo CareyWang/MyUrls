@@ -2,13 +2,21 @@ package main
 
 import (
 	"context"
+	"errors"
 	"time"
+
+	"github.com/redis/go-redis/v9"
 )
 
-// ShortToLong gets the long URL from a short URL
-func ShortToLong(ctx context.Context, shortKey string) string {
+// ShortToLong gets the long URL from a short URL.
+// It returns an empty string when no valid mapping exists.
+func ShortToLong(ctx context.Context, shortKey string) (string, error) {
 	rc := GetRedisClient()
-	return rc.Get(ctx, shortKey).Val()
+	longURL, err := rc.Get(ctx, shortKey).Result()
+	if errors.Is(err, redis.Nil) {
+		return "", nil
+	}
+	return longURL, err
 }
 
 // Renew updates the expiration time of a short URL

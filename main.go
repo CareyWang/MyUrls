@@ -60,11 +60,13 @@ func main() {
 	// GC optimize
 	ballast := make([]byte, 1<<30) // 预分配 1G 内存，不会实际占用物理内存，不可读写该变量
 	defer func() {
-		logger.Info("ballast len %v", len(ballast))
+		logger.Infof("ballast len %v", len(ballast))
 	}()
 
 	// start http server
-	run()
+	if err := run(); err != nil {
+		logger.Fatalln("server failed: ", err)
+	}
 }
 
 func parseEnvirons() {
@@ -85,7 +87,7 @@ func parseEnvirons() {
 	}
 }
 
-func run() {
+func run() error {
 	// init and run server
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -101,5 +103,5 @@ func run() {
 	router.GET("/:shortKey", ShortToLongHandler())
 
 	logger.Infof("server running on :%s", port)
-	router.Run(fmt.Sprintf(":%s", port))
+	return router.Run(fmt.Sprintf(":%s", port))
 }

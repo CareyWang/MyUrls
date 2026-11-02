@@ -16,6 +16,10 @@ func TestCreatedShortURLResolves(t *testing.T) {
 	creator := newTestCreator(t, client)
 	key, err := creator.Create(context.Background(), "https://example.com", "testKey")
 	require.NoError(t, err)
-	require.Equal(t, "https://example.com", ShortToLong(context.Background(), key))
-	require.Empty(t, ShortToLong(context.Background(), "missing"))
+	longURL, err := ShortToLong(context.Background(), key)
+	require.NoError(t, err)
+	require.Equal(t, "https://example.com", longURL)
+	longURL, err = ShortToLong(context.Background(), "missing")
+	require.NoError(t, err)
+	require.Empty(t, longURL)
 }

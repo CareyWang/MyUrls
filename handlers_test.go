@@ -17,6 +17,84 @@ import (
 	"go.uber.org/zap"
 )
 
+func TestLongToShortHandlerRejectsInvalidInput(t *testing.T) {
+	previousLogger := logger
+	logger = zap.NewNop().Sugar()
+	t.Cleanup(func() { logger = previousLogger })
+
+	const invalidLongURL = "invalid long URL, only http and https URLs are supported"
+	const invalidShortKey = "invalid short key, only letters, digits, hyphens, and underscores are allowed"
+	for _, tc := range []struct {
+		name        string
+		longURL     string
+		shortKey    string
+		wantMessage string
+	}{
+		{"plain text decodable as base64", "example/path", "", invalidLongURL},
+		{"missing scheme", "example.com", "", invalidLongURL},
+		{"javascript scheme", "javascript:alert(1)", "", invalidLongURL},
+		{"base64 javascript scheme", base64.StdEncoding.EncodeToString([]byte("javascript:alert(1)")), "", invalidLongURL},
+		{"missing host", "https://", "", invalidLongURL},
+		{"short key shadows static file", "https://example.com", "logo.png", invalidShortKey},
+		{"short key with slash", "https://example.com", "a/b", invalidShortKey},
+		{"short key with query", "https://example.com", "q?x", invalidShortKey},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server, client := newTestRedis(t)
+			creator := newTestCreator(t, client)
+			body, err := json.Marshal(map[string]string{"longUrl": tc.longURL, "shortKey": tc.shortKey})
+			require.NoError(t, err)
+			request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
+			request.Header.Set("Content-Type", "application/json")
+			router := gin.New()
+			router.POST("/short", LongToShortHandler(creator))
+			response := httptest.NewRecorder()
+			router.ServeHTTP(response, request)
+
+			require.Equal(t, http.StatusOK, response.Code)
+			expected, err := json.Marshal(Response{Code: ResponseCodeParamsCheckError, Msg: tc.wantMessage})
+			require.NoError(t, err)
+			require.JSONEq(t, string(expected), response.Body.String())
+			require.Empty(t, server.Keys())
+		})
+	}
+}
+
+func TestShortToLongHandler(t *testing.T) {
+	previousLogger := logger
+	logger = zap.NewNop().Sugar()
+	previousClient := RedisClient
+	t.Cleanup(func() {
+		logger = previousLogger
+		RedisClient = previousClient
+	})
+
+	server, client := newTestRedis(t)
+	RedisClient = client
+	require.NoError(t, client.Set(context.Background(), "custom", "https://example.com", time.Hour).Err())
+	router := gin.New()
+	router.GET("/:shortKey", ShortToLongHandler())
+	get := func(path string) *httptest.ResponseRecorder {
+		response := httptest.NewRecorder()
+		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
+		return response
+	}
+
+	response := get("/custom")
+	require.Equal(t, http.StatusMovedPermanently, response.Code)
+	require.Equal(t, "https://example.com", response.Header().Get("Location"))
+
+	response = get("/missing")
+	require.Equal(t, http.StatusNotFound, response.Code)
+	require.Contains(t, response.Body.String(), "exists or expired")
+
+	server.SetError("ERR storage unavailable")
+	response = get("/custom")
+	require.Equal(t, http.StatusInternalServerError, response.Code)
+	require.NotContains(t, response.Body.String(), "exists or expired")
+	require.NotContains(t, response.Body.String(), "storage unavailable")
+}
+
 func TestLongToShortHandler(t *testing.T) {
 	previousLogger := logger
 	logger = zap.NewNop().Sugar()

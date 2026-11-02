@@ -1,6 +1,6 @@
 # MyUrls
 
-MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短、自定义短键以及短链接重定向功能。前端页面与静态资源通过 Go `embed` 特性编译至单个二进制文件中，无需单独分发静态资源文件。
+MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短、用户指定短键以及短链接重定向功能。前端页面与静态资源通过 Go `embed` 特性编译至单个二进制文件中，无需单独分发静态资源文件。
 
 ## 目录
 
@@ -26,8 +26,8 @@ MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短�
 
 运行 MyUrls 前，需要准备以下环境：
 
-- **Redis 服务**：用于存储长短链接的映射关系（推荐 Redis 6.0 及以上版本）。
-- 若使用容器化部署，需要安装 Docker 20.10+ 及 Docker Compose 2.0+。
+- **Redis 服务**：用于存储长短链接的映射关系。
+- 若使用容器化部署，需要安装 Docker 及 Docker Compose。
 - 若从源码编译，需要安装 Go 1.27 或更高版本。
 
 ## 快速开始
@@ -89,17 +89,23 @@ docker run -d \
 
 ### 使用二进制文件运行
 
-1. 从 [GitHub Actions 构建产物](https://github.com/CareyWang/MyUrls/actions/workflows/go.yml) 或 Release 页面下载对应操作系统与架构的可执行文件。
+1. 从 [GitHub Actions 构建产物](https://github.com/CareyWang/MyUrls/actions/workflows/go.yml) 下载对应平台的压缩包并解压。构建产物目前提供 Linux amd64、Linux arm64 和 Windows x64 版本；macOS 请参阅[本地编译](#本地编译)。以 Linux amd64 为例：
+
+   ```bash
+   tar -xzf myurls-linux-amd64.tar.gz
+   cd myurls
+   ```
+
 2. 直接指定参数启动：
 
    ```bash
-   ./MyUrls -domain example.com -port 8080 -conn 127.0.0.1:6379
+   ./myurls-linux-amd64 -domain example.com -port 8080 -conn 127.0.0.1:6379
    ```
 
 3. 生产环境中，推荐使用进程守护工具（如 [PM2](https://pm2.keymetrics.io/) 或 systemd）进行托管：
 
    ```bash
-   pm2 start ./MyUrls --name myurls -- -domain example.com -port 8080 -conn 127.0.0.1:6379
+   pm2 start ./myurls-linux-amd64 --name myurls -- -domain example.com -port 8080 -conn 127.0.0.1:6379
    ```
 
 ## 配置说明
@@ -129,8 +135,8 @@ MyUrls 支持通过命令行参数或环境变量进行配置。当两者同时�
 
 | 参数名 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `longUrl` | string | 是 | 原始长链接。支持明文 URL 或 Base64 编码格式 |
-| `shortKey` | string | 否 | 自定义短键。若留空，系统自动生成 7 位随机字符串 |
+| `longUrl` | string | 是 | 长链接。支持明文 URL 或 Base64 编码格式 |
+| `shortKey` | string | 否 | 用户指定的短键。若留空，系统自动生成 7 位随机字符串 |
 
 #### 请求示例
 
@@ -166,7 +172,7 @@ curl -X POST https://example.com/short \
   }
   ```
 
-- **短键已被占用**（用户指定的 `shortKey` 已存在且未过期）：
+- **短键已被占用**（用户指定的 `shortKey` 已被一条有效映射占用）：
 
   ```json
   {
@@ -195,8 +201,8 @@ curl -X POST https://example.com/short \
 
 #### 响应说明
 
-- **映射存在且有效**：返回 HTTP 状态码 `301 Moved Permanently`，并在 `Location` 响应头中携带原始长链接地址。
-- **短键不存在或已过期**：返回 HTTP 状态码 `404 Not Found` 及 JSON 错误信息：
+- **映射存在且有效**：返回 HTTP 状态码 `301 Moved Permanently`，并在 `Location` 响应头中携带长链接。
+- **映射不存在或已过期**：返回 HTTP 状态码 `404 Not Found` 及 JSON 错误信息：
 
   ```json
   {
@@ -220,8 +226,8 @@ curl -X POST https://example.com/short \
 
 ### 有效期与防覆盖规则
 
-- 每条创建成功的短链接映射有效期默认为 365 天。
-- 写入采用原子防覆盖机制。若短键已被占用，系统拒绝覆盖已有长链接，且不会刷新或重置已有短键的剩余有效期。
+- 每条创建成功的短链接映射有效期为 365 天。
+- 写入采用原子防覆盖机制。若短键已被占用，系统拒绝覆盖已有映射，且不会刷新或重置其剩余有效期。
 - 为避免网络丢包导致写入命令重放引起假冲突，创建路径禁用了 Redis 命令盲重试策略。
 
 ## 构建与编译
@@ -234,7 +240,7 @@ curl -X POST https://example.com/short \
 # 安装依赖
 make install
 
-# 编译当前平台二进制文件（输出至 build/MyUrls）
+# 编译当前平台二进制文件（输出至 build/myurls）
 make
 ```
 
@@ -248,10 +254,10 @@ make all
 
 # 单独编译各平台二进制文件
 make linux          # Linux amd64
-make arm64          # Linux arm64
+make aarch64        # Linux arm64
 make darwin         # macOS amd64
 make darwin-arm64   # macOS arm64 (Apple Silicon)
-make windows        # Windows amd64 (输出 build/MyUrls-windows-amd64.exe)
+make windows        # Windows amd64 (输出 build/myurls-windows-x64)
 ```
 
 > **说明**：首页静态资源位于 `public/` 目录下，由 `go:embed` 嵌入。如果修改了 `public/` 目录下的 HTML 或资源文件，必须重新编译方可生效。

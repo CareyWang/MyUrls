@@ -32,6 +32,8 @@ func newShortURLCreator(options *redis.Options) *shortURLCreator {
 	creationOptions := *options
 	// Replaying SET NX after a lost reply can turn our own write into a collision.
 	creationOptions.MaxRetries = -1
+	// Options returns the source client's processor, whose handlers are already registered.
+	creationOptions.PushNotificationProcessor = nil
 	return &shortURLCreator{client: redis.NewClient(&creationOptions), generateKey: generateShortKey}
 }
 

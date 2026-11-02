@@ -15,13 +15,15 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// lostSetReplyConn discards the first SET reply after Redis has executed it.
+// lostSetReplyConn discards the first SET reply after Redis has executed it,
+// then reports EOF on every later read, as a connection closed by its peer does.
 // The shared state keeps the fault limited to one reply across reconnections.
 type lostSetReplyConn struct {
 	net.Conn
 	dropped  *atomic.Bool
 	writes   *atomic.Int32
 	dropNext bool
+	closed   bool
 }
 
 func (c *lostSetReplyConn) Write(p []byte) (int, error) {
@@ -33,12 +35,25 @@ func (c *lostSetReplyConn) Write(p []byte) (int, error) {
 }
 
 func (c *lostSetReplyConn) Read(p []byte) (int, error) {
+	if c.closed {
+		return 0, io.EOF
+	}
 	n, err := c.Conn.Read(p)
 	if c.dropNext && n > 0 {
 		c.dropNext = false
+		c.closed = true
 		return 0, io.EOF
 	}
 	return n, err
+}
+
+func TestNewShortURLCreatorOwnsPushProcessor(t *testing.T) {
+	_, client := newTestRedis(t)
+	creator := newTestCreator(t, client)
+
+	assert.NotNil(t, creator.client.Options().PushNotificationProcessor)
+	assert.False(t, creator.client.Options().PushNotificationProcessor == client.Options().PushNotificationProcessor,
+		"sharing a processor makes the second client fail to register its handlers")
 }
 
 func TestCreateShortURLLostReply(t *testing.T) {

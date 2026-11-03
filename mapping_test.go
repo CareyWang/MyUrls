@@ -16,7 +16,7 @@ import (
 
 func newTestMappingsAt(t testing.TB, addr string) *shortURLMappings {
 	t.Helper()
-	mappings := newShortURLMappings(newRedisStore(addr, ""))
+	mappings := newShortURLMappings(newRedisStore(addr, ""), nil)
 	t.Cleanup(func() {
 		if err := mappings.Close(); err != nil {
 			t.Errorf("close short URL mappings: %v", err)

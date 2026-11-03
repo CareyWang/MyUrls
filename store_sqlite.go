@@ -33,6 +33,7 @@ const (
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, created_at = excluded.created_at
 		WHERE url_mappings.expires_at IS NOT NULL AND url_mappings.expires_at <= ?`
 	resolveMappingSQL = `SELECT value FROM url_mappings WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)`
+	mappingExpirySQL  = `SELECT expires_at FROM url_mappings WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)`
 	deleteExpiredSQL  = `DELETE FROM url_mappings WHERE expires_at IS NOT NULL AND expires_at <= ?`
 )
 
@@ -94,6 +95,22 @@ func (s *sqliteStore) Resolve(ctx context.Context, shortKey string) (string, err
 		return "", errShortURLNotFound
 	}
 	return longURL, err
+}
+
+func (s *sqliteStore) TTL(ctx context.Context, shortKey string) (time.Duration, error) {
+	now := s.now()
+	var expiresAt sql.NullInt64
+	err := s.db.QueryRowContext(ctx, mappingExpirySQL, shortKey, now.Unix()).Scan(&expiresAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, errShortURLNotFound
+	}
+	if err != nil {
+		return 0, err
+	}
+	if !expiresAt.Valid {
+		return -1, nil
+	}
+	return time.Unix(expiresAt.Int64, 0).Sub(now), nil
 }
 
 func (s *sqliteStore) Ping(ctx context.Context) error {

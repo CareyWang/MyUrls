@@ -35,6 +35,18 @@ func (s *redisStore) Resolve(ctx context.Context, shortKey string) (string, erro
 	return longURL, err
 }
 
+func (s *redisStore) TTL(ctx context.Context, shortKey string) (time.Duration, error) {
+	remaining, err := s.client.PTTL(ctx, shortKey).Result()
+	if err != nil {
+		return 0, err
+	}
+	// go-redis passes Redis's reply codes through: -2 for a missing key, -1 for no expiration.
+	if remaining == -2 {
+		return 0, errShortURLNotFound
+	}
+	return remaining, nil
+}
+
 func (s *redisStore) Ping(ctx context.Context) error {
 	return s.client.Ping(ctx).Err()
 }

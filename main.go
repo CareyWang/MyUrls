@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"strconv"
+	"time"
 
 	"github.com/gin-gonic/gin"
 )
@@ -19,6 +21,9 @@ var (
 	redisPassword = ""
 	storageType   = storageTypeRedis
 	sqliteFile    = "./data/myurls.db"
+	cacheEnabled  = false
+	cacheSize     = 128
+	cacheTTL      = 300 // seconds
 )
 
 const (
@@ -36,6 +41,9 @@ func init() {
 	flag.StringVar(&redisPassword, "password", redisPassword, "password of the redis server")
 	flag.StringVar(&storageType, "storage-type", storageType, "mapping storage: redis or sqlite")
 	flag.StringVar(&sqliteFile, "sqlite-file", sqliteFile, "path of the sqlite database file")
+	flag.BoolVar(&cacheEnabled, "cache-enabled", cacheEnabled, "cache resolved short URLs in memory")
+	flag.IntVar(&cacheSize, "cache-size", cacheSize, "maximum number of cached short URLs")
+	flag.IntVar(&cacheTTL, "cache-ttl", cacheTTL, "maximum seconds to cache a short URL")
 }
 
 func main() {
@@ -46,7 +54,10 @@ func main() {
 	}
 
 	// 从环境变量中读取配置，且环境变量优先级高于命令行参数
-	parseEnvirons()
+	if err := parseEnvirons(); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
 
 	InitLogger()
 
@@ -62,7 +73,7 @@ func main() {
 	}
 }
 
-func parseEnvirons() {
+func parseEnvirons() error {
 	if p := os.Getenv("MYURLS_PORT"); p != "" {
 		port = p
 	}
@@ -84,6 +95,39 @@ func parseEnvirons() {
 	if f := os.Getenv("MYURLS_STORAGE_SQLITE_FILE"); f != "" {
 		sqliteFile = f
 	}
+	if e := os.Getenv("MYURLS_STORAGE_CACHE_ENABLED"); e != "" {
+		enabled, err := strconv.ParseBool(e)
+		if err != nil {
+			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_ENABLED: %w", err)
+		}
+		cacheEnabled = enabled
+	}
+	if s := os.Getenv("MYURLS_STORAGE_CACHE_SIZE"); s != "" {
+		size, err := strconv.Atoi(s)
+		if err != nil {
+			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_SIZE: %w", err)
+		}
+		cacheSize = size
+	}
+	if t := os.Getenv("MYURLS_STORAGE_CACHE_TTL"); t != "" {
+		ttl, err := strconv.Atoi(t)
+		if err != nil {
+			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_TTL: %w", err)
+		}
+		cacheTTL = ttl
+	}
+	return nil
+}
+
+// newMappingCache returns nil when the cache is disabled.
+func newMappingCache() (*resolveCache, error) {
+	if !cacheEnabled {
+		return nil, nil
+	}
+	if cacheSize <= 0 || cacheTTL <= 0 {
+		return nil, fmt.Errorf("cache size and ttl must be positive, got %d and %d", cacheSize, cacheTTL)
+	}
+	return newResolveCache(cacheSize, time.Duration(cacheTTL)*time.Second), nil
 }
 
 func newMappingStore() (mappingStore, error) {
@@ -99,11 +143,15 @@ func newMappingStore() (mappingStore, error) {
 
 func run() error {
 	// init and check storage
+	cache, err := newMappingCache()
+	if err != nil {
+		return err
+	}
 	store, err := newMappingStore()
 	if err != nil {
 		return err
 	}
-	mappings := newShortURLMappings(store)
+	mappings := newShortURLMappings(store, cache)
 	defer mappings.Close()
 	if err := mappings.Ping(context.Background()); err != nil {
 		return fmt.Errorf("%s ping failed: %w", storageType, err)

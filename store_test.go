@@ -120,6 +120,31 @@ func TestStoreZeroTTLNeverExpires(t *testing.T) {
 	})
 }
 
+func TestStoreTTL(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
+		ctx := context.Background()
+		_, err := store.TTL(ctx, "missing")
+		require.ErrorIs(t, err, errShortURLNotFound)
+
+		_, err = store.Claim(ctx, "expiring", "https://example.com", time.Hour)
+		require.NoError(t, err)
+		advance(20 * time.Minute)
+		remaining, err := store.TTL(ctx, "expiring")
+		require.NoError(t, err)
+		require.Equal(t, 40*time.Minute, remaining)
+
+		_, err = store.Claim(ctx, "forever", "https://example.com", 0)
+		require.NoError(t, err)
+		remaining, err = store.TTL(ctx, "forever")
+		require.NoError(t, err)
+		require.Negative(t, remaining)
+
+		advance(40 * time.Minute)
+		_, err = store.TTL(ctx, "expiring")
+		require.ErrorIs(t, err, errShortURLNotFound)
+	})
+}
+
 func TestStoreConcurrentClaimsHaveOneWinner(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, _ func(time.Duration)) {
 		const requests = 32

@@ -29,6 +29,9 @@ type mappingStore interface {
 	Claim(ctx context.Context, shortKey, longURL string, ttl time.Duration) (bool, error)
 	// Resolve returns errShortURLNotFound when no valid mapping exists.
 	Resolve(ctx context.Context, shortKey string) (string, error)
+	// TTL returns a mapping's remaining lifetime, negative if it never expires,
+	// or errShortURLNotFound when no valid mapping exists.
+	TTL(ctx context.Context, shortKey string) (time.Duration, error)
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -36,12 +39,14 @@ type mappingStore interface {
 // shortURLMappings stores the mappings from short keys to long URLs.
 type shortURLMappings struct {
 	store       mappingStore
+	cache       *resolveCache // Optional.
 	generateKey func() (string, error)
 }
 
 // newShortURLMappings returns mappings that callers must close.
-func newShortURLMappings(store mappingStore) *shortURLMappings {
-	return &shortURLMappings{store: store, generateKey: generateShortKey}
+// A nil cache resolves every key from the store.
+func newShortURLMappings(store mappingStore, cache *resolveCache) *shortURLMappings {
+	return &shortURLMappings{store: store, cache: cache, generateKey: generateShortKey}
 }
 
 // Close releases the storage.
@@ -88,7 +93,21 @@ func (m *shortURLMappings) Create(ctx context.Context, longURL, shortKey string)
 // Resolve returns the long URL of a short key.
 // It returns errShortURLNotFound when no valid mapping exists.
 func (m *shortURLMappings) Resolve(ctx context.Context, shortKey string) (string, error) {
-	return m.store.Resolve(ctx, shortKey)
+	if m.cache != nil {
+		if longURL, ok := m.cache.get(shortKey); ok {
+			return longURL, nil
+		}
+	}
+
+	longURL, err := m.store.Resolve(ctx, shortKey)
+	if err != nil || m.cache == nil {
+		return longURL, err
+	}
+	// Without a known lifetime the entry could outlive the mapping, so skip caching.
+	if remaining, err := m.store.TTL(ctx, shortKey); err == nil {
+		m.cache.set(shortKey, longURL, remaining)
+	}
+	return longURL, nil
 }
 
 func generateShortKey() (string, error) {

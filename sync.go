@@ -92,14 +92,7 @@ func syncMappings(ctx context.Context, source *redisStore, target mappingStore, 
 }
 
 func syncMapping(ctx context.Context, source *redisStore, target mappingStore, key string) (bool, error) {
-	longURL, err := source.Resolve(ctx, key)
-	if errors.Is(err, errShortURLNotFound) {
-		return false, nil
-	}
-	if err != nil {
-		return false, err
-	}
-	remaining, err := source.TTL(ctx, key)
+	longURL, remaining, err := source.Resolve(ctx, key)
 	if errors.Is(err, errShortURLNotFound) {
 		return false, nil
 	}

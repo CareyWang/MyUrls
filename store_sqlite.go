@@ -32,8 +32,7 @@ const (
 	claimMappingSQL              = `INSERT INTO url_mappings (key, value, expires_at, created_at) VALUES (?, ?, ?, ?)
 		ON CONFLICT(key) DO UPDATE SET value = excluded.value, expires_at = excluded.expires_at, created_at = excluded.created_at
 		WHERE url_mappings.expires_at IS NOT NULL AND url_mappings.expires_at <= ?`
-	resolveMappingSQL = `SELECT value FROM url_mappings WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)`
-	mappingExpirySQL  = `SELECT expires_at FROM url_mappings WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)`
+	resolveMappingSQL = `SELECT value, expires_at FROM url_mappings WHERE key = ? AND (expires_at IS NULL OR expires_at > ?)`
 	deleteExpiredSQL  = `DELETE FROM url_mappings WHERE expires_at IS NOT NULL AND expires_at <= ?`
 )
 
@@ -88,29 +87,21 @@ func (s *sqliteStore) Claim(ctx context.Context, shortKey, longURL string, ttl t
 	return written > 0, nil
 }
 
-func (s *sqliteStore) Resolve(ctx context.Context, shortKey string) (string, error) {
-	var longURL string
-	err := s.db.QueryRowContext(ctx, resolveMappingSQL, shortKey, s.now().Unix()).Scan(&longURL)
-	if errors.Is(err, sql.ErrNoRows) {
-		return "", errShortURLNotFound
-	}
-	return longURL, err
-}
-
-func (s *sqliteStore) TTL(ctx context.Context, shortKey string) (time.Duration, error) {
+func (s *sqliteStore) Resolve(ctx context.Context, shortKey string) (string, time.Duration, error) {
 	now := s.now()
+	var longURL string
 	var expiresAt sql.NullInt64
-	err := s.db.QueryRowContext(ctx, mappingExpirySQL, shortKey, now.Unix()).Scan(&expiresAt)
+	err := s.db.QueryRowContext(ctx, resolveMappingSQL, shortKey, now.Unix()).Scan(&longURL, &expiresAt)
 	if errors.Is(err, sql.ErrNoRows) {
-		return 0, errShortURLNotFound
+		return "", 0, errShortURLNotFound
 	}
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
 	if !expiresAt.Valid {
-		return -1, nil
+		return longURL, -1, nil
 	}
-	return time.Unix(expiresAt.Int64, 0).Sub(now), nil
+	return longURL, time.Unix(expiresAt.Int64, 0).Sub(now), nil
 }
 
 func (s *sqliteStore) Ping(ctx context.Context) error {

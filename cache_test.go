@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"sync"
 	"testing"
@@ -91,23 +90,15 @@ func TestResolveCacheConcurrentUse(t *testing.T) {
 	require.LessOrEqual(t, cache.order.Len(), 8)
 }
 
-// countingStore counts reads and can fail the lifetime lookup.
+// countingStore counts reads.
 type countingStore struct {
 	mappingStore
 	resolves int
-	ttlErr   error
 }
 
-func (s *countingStore) Resolve(ctx context.Context, shortKey string) (string, error) {
+func (s *countingStore) Resolve(ctx context.Context, shortKey string) (string, time.Duration, error) {
 	s.resolves++
 	return s.mappingStore.Resolve(ctx, shortKey)
-}
-
-func (s *countingStore) TTL(ctx context.Context, shortKey string) (time.Duration, error) {
-	if s.ttlErr != nil {
-		return 0, s.ttlErr
-	}
-	return s.mappingStore.TTL(ctx, shortKey)
 }
 
 func TestMappingsCacheResolvedURLs(t *testing.T) {
@@ -164,22 +155,6 @@ func TestMappingsCacheDoesNotOutliveMapping(t *testing.T) {
 	longURL, err := mappings.Resolve(ctx, "key")
 	require.NoError(t, err)
 	require.Equal(t, "https://example.com/replacement", longURL)
-}
-
-func TestMappingsSkipCacheWithoutKnownLifetime(t *testing.T) {
-	store, _ := newTestSQLiteStore(t)
-	ctx := context.Background()
-	counting := &countingStore{mappingStore: store, ttlErr: errors.New("storage unavailable")}
-	mappings := newShortURLMappings(counting, newResolveCache(8, time.Hour))
-	_, err := store.Claim(ctx, "key", "https://example.com", time.Hour)
-	require.NoError(t, err)
-
-	for range 2 {
-		longURL, err := mappings.Resolve(ctx, "key")
-		require.NoError(t, err, "a failed lifetime lookup must not fail the read")
-		require.Equal(t, "https://example.com", longURL)
-	}
-	require.Equal(t, 2, counting.resolves)
 }
 
 func TestMappingsWithoutCacheAlwaysReadStore(t *testing.T) {

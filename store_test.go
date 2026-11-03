@@ -58,14 +58,14 @@ func forEachStore(t *testing.T, test func(t *testing.T, store mappingStore, adva
 
 func requireStored(t *testing.T, store mappingStore, shortKey, wantLongURL string) {
 	t.Helper()
-	longURL, err := store.Resolve(context.Background(), shortKey)
+	longURL, _, err := store.Resolve(context.Background(), shortKey)
 	require.NoError(t, err)
 	require.Equal(t, wantLongURL, longURL)
 }
 
 func TestStoreResolvesMissingKeyAsNotFound(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, _ func(time.Duration)) {
-		longURL, err := store.Resolve(context.Background(), "missing")
+		longURL, _, err := store.Resolve(context.Background(), "missing")
 		require.ErrorIs(t, err, errShortURLNotFound)
 		require.Empty(t, longURL)
 	})
@@ -86,7 +86,7 @@ func TestStoreClaimDoesNotOverwriteValidMapping(t *testing.T) {
 
 		// The failed claim must not have extended the original expiration.
 		advance(time.Minute)
-		_, err = store.Resolve(ctx, "key")
+		_, _, err = store.Resolve(ctx, "key")
 		require.ErrorIs(t, err, errShortURLNotFound)
 	})
 }
@@ -120,27 +120,24 @@ func TestStoreZeroTTLNeverExpires(t *testing.T) {
 	})
 }
 
-func TestStoreTTL(t *testing.T) {
+func TestStoreResolveReportsRemainingLifetime(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
 		ctx := context.Background()
-		_, err := store.TTL(ctx, "missing")
-		require.ErrorIs(t, err, errShortURLNotFound)
-
-		_, err = store.Claim(ctx, "expiring", "https://example.com", time.Hour)
+		_, err := store.Claim(ctx, "expiring", "https://example.com", time.Hour)
 		require.NoError(t, err)
 		advance(20 * time.Minute)
-		remaining, err := store.TTL(ctx, "expiring")
+		_, remaining, err := store.Resolve(ctx, "expiring")
 		require.NoError(t, err)
 		require.Equal(t, 40*time.Minute, remaining)
 
 		_, err = store.Claim(ctx, "forever", "https://example.com", 0)
 		require.NoError(t, err)
-		remaining, err = store.TTL(ctx, "forever")
+		_, remaining, err = store.Resolve(ctx, "forever")
 		require.NoError(t, err)
 		require.Negative(t, remaining)
 
 		advance(40 * time.Minute)
-		_, err = store.TTL(ctx, "expiring")
+		_, _, err = store.Resolve(ctx, "expiring")
 		require.ErrorIs(t, err, errShortURLNotFound)
 	})
 }
@@ -178,7 +175,7 @@ func TestStoreReportsFailureAsErrorNotAbsence(t *testing.T) {
 		ctx, cancel := context.WithCancel(context.Background())
 		cancel()
 
-		_, err := store.Resolve(ctx, "key")
+		_, _, err := store.Resolve(ctx, "key")
 		require.ErrorIs(t, err, context.Canceled)
 		require.NotErrorIs(t, err, errShortURLNotFound)
 

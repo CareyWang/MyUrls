@@ -27,24 +27,27 @@ func (s *redisStore) Claim(ctx context.Context, shortKey, longURL string, ttl ti
 	return s.creationClient.SetNX(ctx, shortKey, longURL, ttl).Result()
 }
 
-func (s *redisStore) Resolve(ctx context.Context, shortKey string) (string, error) {
-	longURL, err := s.client.Get(ctx, shortKey).Result()
+// Resolve pipelines both reads, so it costs one round trip.
+func (s *redisStore) Resolve(ctx context.Context, shortKey string) (string, time.Duration, error) {
+	var longURL *redis.StringCmd
+	var remaining *redis.DurationCmd
+	_, err := s.client.Pipelined(ctx, func(pipe redis.Pipeliner) error {
+		longURL = pipe.Get(ctx, shortKey)
+		remaining = pipe.PTTL(ctx, shortKey)
+		return nil
+	})
 	if errors.Is(err, redis.Nil) {
-		return "", errShortURLNotFound
+		return "", 0, errShortURLNotFound
 	}
-	return longURL, err
-}
-
-func (s *redisStore) TTL(ctx context.Context, shortKey string) (time.Duration, error) {
-	remaining, err := s.client.PTTL(ctx, shortKey).Result()
 	if err != nil {
-		return 0, err
+		return "", 0, err
 	}
-	// go-redis passes Redis's reply codes through: -2 for a missing key, -1 for no expiration.
-	if remaining == -2 {
-		return 0, errShortURLNotFound
+	// go-redis passes Redis's reply codes through: -2 for a key that expired after
+	// the GET, -1 for no expiration.
+	if remaining.Val() == -2 {
+		return "", 0, errShortURLNotFound
 	}
-	return remaining, nil
+	return longURL.Val(), remaining.Val(), nil
 }
 
 func (s *redisStore) Ping(ctx context.Context) error {

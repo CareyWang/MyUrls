@@ -27,11 +27,9 @@ type mappingStore interface {
 	// whether it did. A zero ttl stores a mapping that never expires.
 	// An uncertain write must return an error, not false.
 	Claim(ctx context.Context, shortKey, longURL string, ttl time.Duration) (bool, error)
-	// Resolve returns errShortURLNotFound when no valid mapping exists.
-	Resolve(ctx context.Context, shortKey string) (string, error)
-	// TTL returns a mapping's remaining lifetime, negative if it never expires,
-	// or errShortURLNotFound when no valid mapping exists.
-	TTL(ctx context.Context, shortKey string) (time.Duration, error)
+	// Resolve returns a mapping's long URL and remaining lifetime, negative if it
+	// never expires, or errShortURLNotFound when no valid mapping exists.
+	Resolve(ctx context.Context, shortKey string) (string, time.Duration, error)
 	Ping(ctx context.Context) error
 	Close() error
 }
@@ -96,12 +94,11 @@ func (m *shortURLMappings) Resolve(ctx context.Context, shortKey string) (string
 		}
 	}
 
-	longURL, err := m.store.Resolve(ctx, shortKey)
-	if err != nil || m.cache == nil {
-		return longURL, err
+	longURL, remaining, err := m.store.Resolve(ctx, shortKey)
+	if err != nil {
+		return "", err
 	}
-	// Without a known lifetime the entry could outlive the mapping, so skip caching.
-	if remaining, err := m.store.TTL(ctx, shortKey); err == nil {
+	if m.cache != nil {
 		m.cache.set(shortKey, longURL, remaining)
 	}
 	return longURL, nil

@@ -38,15 +38,15 @@ func TestSyncMappingsKeepsLifetimes(t *testing.T) {
 	requireStored(t, target, "expiring", "https://example.com/expiring")
 	requireStored(t, target, "forever", "https://example.com/forever")
 
-	remaining, err := target.TTL(context.Background(), "expiring")
+	_, remaining, err := target.Resolve(context.Background(), "expiring")
 	require.NoError(t, err)
 	require.Equal(t, time.Hour, remaining)
-	remaining, err = target.TTL(context.Background(), "forever")
+	_, remaining, err = target.Resolve(context.Background(), "forever")
 	require.NoError(t, err)
 	require.Negative(t, remaining, "a permanent key must stay permanent")
 
 	clock.advance(time.Hour)
-	_, err = target.Resolve(context.Background(), "expiring")
+	_, _, err = target.Resolve(context.Background(), "expiring")
 	require.ErrorIs(t, err, errShortURLNotFound)
 	requireStored(t, target, "forever", "https://example.com/forever")
 }

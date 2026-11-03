@@ -5,7 +5,6 @@ import (
 	"flag"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -67,48 +66,27 @@ func main() {
 	}
 }
 
+// envFlags maps each environment variable to the flag it overrides.
+var envFlags = []struct{ env, flag string }{
+	{"MYURLS_PORT", "port"},
+	{"MYURLS_DOMAIN", "domain"},
+	{"MYURLS_PROTO", "proto"},
+	{"MYURLS_REDIS_CONN", "conn"},
+	{"MYURLS_REDIS_PASSWORD", "password"},
+	{"MYURLS_STORAGE_TYPE", "storage-type"},
+	{"MYURLS_STORAGE_SQLITE_FILE", "sqlite-file"},
+	{"MYURLS_STORAGE_CACHE_ENABLED", "cache-enabled"},
+	{"MYURLS_STORAGE_CACHE_SIZE", "cache-size"},
+	{"MYURLS_STORAGE_CACHE_TTL", "cache-ttl"},
+}
+
 func parseEnvirons() error {
-	if p := os.Getenv("MYURLS_PORT"); p != "" {
-		port = p
-	}
-	if d := os.Getenv("MYURLS_DOMAIN"); d != "" {
-		domain = d
-	}
-	if p := os.Getenv("MYURLS_PROTO"); p != "" {
-		proto = p
-	}
-	if c := os.Getenv("MYURLS_REDIS_CONN"); c != "" {
-		redisAddr = c
-	}
-	if p := os.Getenv("MYURLS_REDIS_PASSWORD"); p != "" {
-		redisPassword = p
-	}
-	if t := os.Getenv("MYURLS_STORAGE_TYPE"); t != "" {
-		storageType = t
-	}
-	if f := os.Getenv("MYURLS_STORAGE_SQLITE_FILE"); f != "" {
-		sqliteFile = f
-	}
-	if e := os.Getenv("MYURLS_STORAGE_CACHE_ENABLED"); e != "" {
-		enabled, err := strconv.ParseBool(e)
-		if err != nil {
-			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_ENABLED: %w", err)
+	for _, e := range envFlags {
+		if value := os.Getenv(e.env); value != "" {
+			if err := flag.Set(e.flag, value); err != nil {
+				return fmt.Errorf("invalid %s: %w", e.env, err)
+			}
 		}
-		cacheEnabled = enabled
-	}
-	if s := os.Getenv("MYURLS_STORAGE_CACHE_SIZE"); s != "" {
-		size, err := strconv.Atoi(s)
-		if err != nil {
-			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_SIZE: %w", err)
-		}
-		cacheSize = size
-	}
-	if t := os.Getenv("MYURLS_STORAGE_CACHE_TTL"); t != "" {
-		ttl, err := strconv.Atoi(t)
-		if err != nil {
-			return fmt.Errorf("invalid MYURLS_STORAGE_CACHE_TTL: %w", err)
-		}
-		cacheTTL = ttl
 	}
 	return nil
 }

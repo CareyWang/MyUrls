@@ -1,48 +1,36 @@
-BINARY_DEFAULT="build/myurls"
-BINARY_LINUX="build/myurls-linux-amd64"
-BINARY_DARWIN="build/myurls-darwin-amd64"
-BINARY_DARWIN_ARM64="build/myurls-darwin-arm64"
-BINARY_WINDOWS="build/myurls-windows-x64"
-BINARY_ARM64="build/myurls-linux-arm64"
+BINARY_DEFAULT=build/myurls
+BINARY_LINUX=build/myurls-linux-amd64
+BINARY_DARWIN=build/myurls-darwin-amd64
+BINARY_DARWIN_ARM64=build/myurls-darwin-arm64
+BINARY_WINDOWS=build/myurls-windows-x64
+BINARY_ARM64=build/myurls-linux-arm64
 
-VERSION=1.0.0
-BUILD=`date +%FT%T%z`
+# cross_build builds for GOOS $(1) and GOARCH $(2) into $(3).
+define cross_build
+	@echo $(3)
+	@CGO_ENABLED=0 GOOS=$(1) GOARCH=$(2) go build -ldflags="-s -w" -o $(3)
+endef
 
 default:
 	@echo ${BINARY_DEFAULT}
 	@CGO_ENABLED=0 go build -ldflags="-s -w" -o ${BINARY_DEFAULT}
 
-all:
-	@echo ${BINARY_LINUX}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX}
-	@echo ${BINARY_DARWIN}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
-	@echo ${BINARY_DARWIN_ARM64}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
-	@echo ${BINARY_WINDOWS}
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS}
-	@echo ${BINARY_ARM64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64}
+all: linux darwin darwin-arm64 windows aarch64
 
 linux:
-	@echo ${BINARY_LINUX}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_LINUX}
+	$(call cross_build,linux,amd64,${BINARY_LINUX})
 
 darwin:
-	@echo ${BINARY_DARWIN}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_DARWIN}
+	$(call cross_build,darwin,amd64,${BINARY_DARWIN})
 
 darwin-arm64:
-	@echo ${BINARY_DARWIN_ARM64}
-	@CGO_ENABLED=0 GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_DARWIN_ARM64}
+	$(call cross_build,darwin,arm64,${BINARY_DARWIN_ARM64})
 
 windows:
-	@echo ${BINARY_WINDOWS}
-	@CGO_ENABLED=0 GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o ${BINARY_WINDOWS}
+	$(call cross_build,windows,amd64,${BINARY_WINDOWS})
 
 aarch64:
-	@echo ${BINARY_ARM64}
-	@CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -ldflags="-s -w" -o ${BINARY_ARM64}
+	$(call cross_build,linux,arm64,${BINARY_ARM64})
 
 install:
 	@go mod tidy
@@ -51,9 +39,4 @@ fmt:
 	@go fmt ./...
 
 clean:
-	@if [ -f ${BINARY_DEFAULT} ] ; then rm ${BINARY_DEFAULT} ; fi
-	@if [ -f ${BINARY_LINUX} ] ; then rm ${BINARY_LINUX} ; fi
-	@if [ -f ${BINARY_DARWIN} ] ; then rm ${BINARY_DARWIN} ; fi
-	@if [ -f ${BINARY_DARWIN_ARM64} ] ; then rm ${BINARY_DARWIN_ARM64} ; fi
-	@if [ -f ${BINARY_WINDOWS} ] ; then rm ${BINARY_WINDOWS} ; fi
-	@if [ -f ${BINARY_ARM64} ] ; then rm ${BINARY_ARM64} ; fi
+	@rm -f ${BINARY_DEFAULT} ${BINARY_LINUX} ${BINARY_DARWIN} ${BINARY_DARWIN_ARM64} ${BINARY_WINDOWS} ${BINARY_ARM64}

@@ -65,9 +65,6 @@ func (m *shortURLMappings) Ping(ctx context.Context) error {
 func (m *shortURLMappings) Create(ctx context.Context, longURL, shortKey string) (string, error) {
 	generated := shortKey == ""
 	for attempt := 0; attempt <= maxShortKeyRetries; attempt++ {
-		if err := ctx.Err(); err != nil {
-			return "", err
-		}
 		if generated {
 			var err error
 			shortKey, err = m.generateKey()

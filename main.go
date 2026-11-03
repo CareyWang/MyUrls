@@ -11,8 +11,6 @@ import (
 	"github.com/gin-gonic/gin"
 )
 
-var helpFlag bool
-
 var (
 	port          = "8080"
 	domain        = "localhost:8080"
@@ -32,8 +30,6 @@ const (
 )
 
 func init() {
-	flag.BoolVar(&helpFlag, "h", false, "display help")
-
 	flag.StringVar(&port, "port", port, "port to run the server on")
 	flag.StringVar(&domain, "domain", domain, "domain of the server")
 	flag.StringVar(&proto, "proto", proto, "protocol of the server")
@@ -56,10 +52,6 @@ func main() {
 	}
 
 	flag.Parse()
-	if helpFlag {
-		flag.Usage()
-		os.Exit(0)
-	}
 
 	// 从环境变量中读取配置，且环境变量优先级高于命令行参数
 	if err := parseEnvirons(); err != nil {
@@ -68,12 +60,6 @@ func main() {
 	}
 
 	InitLogger()
-
-	// GC optimize
-	ballast := make([]byte, 1<<30) // 预分配 1G 内存，不会实际占用物理内存，不可读写该变量
-	defer func() {
-		logger.Infof("ballast len %v", len(ballast))
-	}()
 
 	// start http server
 	if err := run(); err != nil {

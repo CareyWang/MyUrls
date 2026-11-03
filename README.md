@@ -401,31 +401,6 @@ MyUrls 内置基于 Lumberjack 的日志滚动机制。访问日志默认写入�
 - 最多保留历史日志文件数：10 个
 - 历史日志最长保留天数：7 天
 
-### 使用 logrotate 维护（可选）
-
-在基于 Linux 主机系统直接部署并由 systemd 托管的场景中，也可以配置外部 `logrotate` 进行日志管理。
-
-创建 `/etc/logrotate.d/myurls` 文件，假定应用部署在 `/app`：
-
-```logrotate
-/app/logs/access.log {
-    daily
-    rotate 7
-    missingok
-    notifempty
-    compress
-    delaycompress
-    copytruncate
-    create 640 root adm
-}
-```
-
-测试配置有效性（仅验证配置，不实际切割）：
-
-```bash
-logrotate -d /etc/logrotate.d/myurls
-```
-
 ## 测试
 
 项目测试套件基于 `miniredis` 和临时 SQLite 文件实现了全隔离的测试环境，存储的共同行为在两种后端上都会运行，执行测试无需连接外部 Redis 实例。

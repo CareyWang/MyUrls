@@ -2,7 +2,6 @@ package main
 
 import (
 	"os"
-	"path"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,62 +13,25 @@ import (
 var logger *zap.SugaredLogger
 
 const (
+	logFilePath       = "logs/access.log"
 	logFileMaxSize    = 50    // 日志文件最大大小（MB）
 	logFileMaxBackups = 10    // 最多保留的备份文件数量
 	logFileMaxAge     = 7     // 日志文件最长保留天数
 	logFileCompress   = false // 是否压缩备份文件
 )
 
+// InitLogger 初始化 zap logger
 func InitLogger() {
-	// 创建 logs 目录
-	createLogPath()
-
-	// 初始化 zap logger
-	initZapLogger()
-}
-
-// createLogPath 创建 logs 目录
-func createLogPath() error {
-	if dir, err := os.Getwd(); err == nil {
-		logFilePath := dir + "/logs/"
-		if err := os.MkdirAll(logFilePath, 0777); err != nil {
-			panic("create log path failed: " + err.Error())
-		}
-	}
-	return nil
-}
-
-// getLogPath 获取 logs 目录
-func getLogPath() string {
-	if dir, err := os.Getwd(); err == nil {
-		return dir + "/logs/"
-	}
-	return ""
-}
-
-// 定义 zap logger
-func initZapLogger() {
-	encoder := getEncoder()
+	encoder := zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
 	core := zapcore.NewCore(encoder, zapcore.AddSync(os.Stdout), zapcore.DebugLevel)
 
 	logger = zap.New(core).Sugar()
 }
 
-// getEncoder 获取 zap encoder
-func getEncoder() zapcore.Encoder {
-	return zapcore.NewConsoleEncoder(zap.NewDevelopmentEncoderConfig())
-}
-
-// initGinLogger 初始化 gin logger
+// initGinLogger 初始化 gin logger，logs 目录由 lumberjack 在首次写入时创建
 func initGinLogger() *zap.Logger {
-	logPath := getLogPath()
-	logFileName := "access.log"
-
-	// 日志文件
-	logFile := path.Join(logPath, logFileName)
-
 	lumberJackLogger := &lumberjack.Logger{
-		Filename:   logFile,
+		Filename:   logFilePath,
 		MaxSize:    logFileMaxSize,    // 日志文件最大大小（MB）
 		MaxBackups: logFileMaxBackups, // 最多保留的备份文件数量
 		MaxAge:     logFileMaxAge,     // 日志文件最长保留天数
@@ -86,7 +48,7 @@ func initGinLogger() *zap.Logger {
 
 	core := zapcore.NewCore(encoder, writeSyncer, zapcore.InfoLevel)
 
-	return zap.New(core, zap.AddCaller())
+	return zap.New(core)
 }
 
 // initServiceLogger 初始化服务日志

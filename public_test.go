@@ -15,6 +15,8 @@ func TestPublicRoutesWithoutWorkingDirectoryAssets(t *testing.T) {
 	require.NoError(t, err)
 	logo, err := os.ReadFile("public/logo.png")
 	require.NoError(t, err)
+	favicon, err := os.ReadFile("public/favicon.ico")
+	require.NoError(t, err)
 
 	t.Chdir(t.TempDir())
 	router := gin.New()
@@ -22,6 +24,12 @@ func TestPublicRoutesWithoutWorkingDirectoryAssets(t *testing.T) {
 	router.GET("/:shortKey", func(c *gin.Context) {
 		c.String(http.StatusOK, c.Param("shortKey"))
 	})
+
+	// The content type of .ico comes from the system's MIME table, so only the body is compared.
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, "/favicon.ico", nil))
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Equal(t, favicon, response.Body.Bytes())
 
 	for _, tc := range []struct {
 		name        string

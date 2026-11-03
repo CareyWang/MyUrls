@@ -59,6 +59,13 @@
         enterToDoShort(ev) {
           ev.keyCode === 13 && this.doShort()
         },
+        utf8ToBase64(text) {
+          let binary = '';
+          new TextEncoder().encode(text).forEach(byte => {
+            binary += String.fromCharCode(byte);
+          });
+          return btoa(binary);
+        },
         doShort() {
           let re = new RegExp('http(s*)://[^\s]*')
           if (re.exec(this.longUrl) === null) {
@@ -69,7 +76,7 @@
           this.loading = true
 
           let data = new FormData();
-          data.append("longUrl", btoa(this.longUrl));
+          data.append("longUrl", this.utf8ToBase64(this.longUrl));
           data.append("shortKey", this.shortUrl.indexOf('http') < 0 ? this.shortUrl : '');
           axios.post('/short', data, {
             header: {

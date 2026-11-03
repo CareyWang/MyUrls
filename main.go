@@ -7,7 +7,6 @@ import (
 	"os"
 
 	"github.com/gin-gonic/gin"
-	"github.com/redis/go-redis/v9"
 )
 
 var helpFlag bool
@@ -42,21 +41,6 @@ func main() {
 
 	InitLogger()
 
-	// init and check redis
-	initRedisClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: redisPassword,
-		DB:       0,
-	})
-
-	ctx := context.Background()
-	rc := GetRedisClient()
-	rs := rc.Ping(ctx)
-	if rs.Err() != nil {
-		logger.Fatalln("redis ping failed: ", rs.Err())
-	}
-	logger.Info("redis ping success")
-
 	// GC optimize
 	ballast := make([]byte, 1<<30) // 预分配 1G 内存，不会实际占用物理内存，不可读写该变量
 	defer func() {
@@ -88,6 +72,14 @@ func parseEnvirons() {
 }
 
 func run() error {
+	// init and check redis
+	mappings := newShortURLMappings(redisAddr, redisPassword)
+	defer mappings.Close()
+	if err := mappings.Ping(context.Background()); err != nil {
+		return fmt.Errorf("redis ping failed: %w", err)
+	}
+	logger.Info("redis ping success")
+
 	// init and run server
 	gin.SetMode(gin.ReleaseMode)
 	router := gin.Default()
@@ -97,10 +89,8 @@ func run() error {
 
 	registerPublicRoutes(router)
 
-	creator := newShortURLCreator(GetRedisClient().Options())
-	defer creator.Close()
-	router.POST("/short", LongToShortHandler(creator))
-	router.GET("/:shortKey", ShortToLongHandler())
+	router.POST("/short", LongToShortHandler(mappings))
+	router.GET("/:shortKey", ShortToLongHandler(mappings))
 
 	logger.Infof("server running on :%s", port)
 	return router.Run(fmt.Sprintf(":%s", port))

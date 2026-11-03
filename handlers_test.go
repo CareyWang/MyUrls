@@ -2,7 +2,6 @@ package main
 
 import (
 	"bytes"
-	"context"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -10,7 +9,6 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"testing"
-	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -40,14 +38,13 @@ func TestLongToShortHandlerRejectsInvalidInput(t *testing.T) {
 		{"short key with query", "https://example.com", "q?x", invalidShortKey},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, client := newTestRedis(t)
-			creator := newTestCreator(t, client)
+			server, mappings := newTestMappings(t)
 			body, err := json.Marshal(map[string]string{"longUrl": tc.longURL, "shortKey": tc.shortKey})
 			require.NoError(t, err)
 			request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
 			request.Header.Set("Content-Type", "application/json")
 			router := gin.New()
-			router.POST("/short", LongToShortHandler(creator))
+			router.POST("/short", LongToShortHandler(mappings))
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 
@@ -63,17 +60,12 @@ func TestLongToShortHandlerRejectsInvalidInput(t *testing.T) {
 func TestShortToLongHandler(t *testing.T) {
 	previousLogger := logger
 	logger = zap.NewNop().Sugar()
-	previousClient := RedisClient
-	t.Cleanup(func() {
-		logger = previousLogger
-		RedisClient = previousClient
-	})
+	t.Cleanup(func() { logger = previousLogger })
 
-	server, client := newTestRedis(t)
-	RedisClient = client
-	require.NoError(t, client.Set(context.Background(), "custom", "https://example.com", time.Hour).Err())
+	server, mappings := newTestMappings(t)
+	require.NoError(t, server.Set("custom", "https://example.com"))
 	router := gin.New()
-	router.GET("/:shortKey", ShortToLongHandler())
+	router.GET("/:shortKey", ShortToLongHandler(mappings))
 	get := func(path string) *httptest.ResponseRecorder {
 		response := httptest.NewRecorder()
 		router.ServeHTTP(response, httptest.NewRequest(http.MethodGet, path, nil))
@@ -102,9 +94,8 @@ func TestLongToShortHandler(t *testing.T) {
 
 	for _, name := range []string{"JSON", "legacy base64", "form", "generated key", "custom conflict", "retry exhaustion", "generation error", "storage error", "invalid parameters"} {
 		t.Run(name, func(t *testing.T) {
-			server, client := newTestRedis(t)
-			creator := newTestCreator(t, client)
-			creator.generateKey = func() (string, error) { return "autoKey", nil }
+			server, mappings := newTestMappings(t)
+			mappings.generateKey = func() (string, error) { return "autoKey", nil }
 			longURL := "https://example.com/path?a=1"
 			params := map[string]string{"longUrl": longURL, "shortKey": "custom"}
 			wantKey := "custom"
@@ -117,12 +108,12 @@ func TestLongToShortHandler(t *testing.T) {
 				params["shortKey"] = ""
 				wantKey = "autoKey"
 			case "custom conflict":
-				require.NoError(t, client.Set(context.Background(), "custom", "original", time.Hour).Err())
+				require.NoError(t, server.Set("custom", "original"))
 				wantCode = ResponseCodeParamsCheckError
 				wantMessage = "short key already exists, please use another one or leave it empty to generate automatically"
 			case "retry exhaustion":
 				params["shortKey"] = ""
-				require.NoError(t, client.Set(context.Background(), "autoKey", "original", time.Hour).Err())
+				require.NoError(t, server.Set("autoKey", "original"))
 				wantCode = ResponseCodeServerError
 				wantMessage = "failed to create short URL"
 			case "storage error":
@@ -131,7 +122,7 @@ func TestLongToShortHandler(t *testing.T) {
 				wantMessage = "failed to create short URL"
 			case "generation error":
 				params["shortKey"] = ""
-				creator.generateKey = func() (string, error) {
+				mappings.generateKey = func() (string, error) {
 					return "", errors.New("random source unavailable")
 				}
 				wantCode = ResponseCodeServerError
@@ -152,7 +143,7 @@ func TestLongToShortHandler(t *testing.T) {
 			request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
 			request.Header.Set("Content-Type", contentType)
 			router := gin.New()
-			router.POST("/short", LongToShortHandler(creator))
+			router.POST("/short", LongToShortHandler(mappings))
 			response := httptest.NewRecorder()
 			router.ServeHTTP(response, request)
 
@@ -161,7 +152,7 @@ func TestLongToShortHandler(t *testing.T) {
 				expected, err := json.Marshal(gin.H{"Code": 1, "ShortUrl": proto + "://" + domain + "/" + wantKey})
 				require.NoError(t, err)
 				require.JSONEq(t, string(expected), response.Body.String())
-				require.Equal(t, longURL, client.Get(context.Background(), wantKey).Val())
+				requireMapping(t, mappings, wantKey, longURL)
 			} else {
 				expected, err := json.Marshal(Response{Code: wantCode, Msg: wantMessage})
 				require.NoError(t, err)

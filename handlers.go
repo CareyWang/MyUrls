@@ -5,12 +5,9 @@ import (
 	"errors"
 	"net/url"
 	"regexp"
-	"time"
 
 	"github.com/gin-gonic/gin"
 )
-
-const defaultRenewTime = time.Hour * 48 // 默认续命时间，2天
 
 // A dot-free short key cannot shadow a static file such as /logo.png.
 var shortKeyPattern = regexp.MustCompile(`^[0-9A-Za-z_-]+$`)
@@ -38,11 +35,18 @@ func normalizeLongURL(input string) (string, bool) {
 }
 
 // ShortToLongHandler gets the long URL from a short URL
-func ShortToLongHandler() gin.HandlerFunc {
+func ShortToLongHandler(mappings *shortURLMappings) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := Response{}
 		shortKey := c.Param("shortKey")
-		longURL, err := ShortToLong(c, shortKey)
+		longURL, err := mappings.Resolve(c, shortKey)
+		if errors.Is(err, errShortURLNotFound) {
+			resp.Code = ResponseCodeServerError
+			resp.Msg = "failed to get long URL, please check the short URL if exists or expired"
+
+			c.JSON(404, resp)
+			return
+		}
 		if err != nil {
 			resp.Code = ResponseCodeServerError
 			resp.Msg = "failed to get long URL"
@@ -51,20 +55,6 @@ func ShortToLongHandler() gin.HandlerFunc {
 			c.JSON(500, resp)
 			return
 		}
-		if longURL == "" {
-			resp.Code = ResponseCodeServerError
-			resp.Msg = "failed to get long URL, please check the short URL if exists or expired"
-
-			c.JSON(404, resp)
-			return
-		}
-
-		// todo
-		// check whether need renew expiration time
-		// only renew once per day
-		// if err := Renew(c, shortKey, defaultRenewTime); err != nil {
-		// 	logger.Warn("failed to renew short URL: ", err.Error())
-		// }
 
 		c.Redirect(301, longURL)
 	}
@@ -76,7 +66,7 @@ type LongToShortParams struct {
 }
 
 // LongToShortHandler creates a short URL from a long URL
-func LongToShortHandler(creator *shortURLCreator) gin.HandlerFunc {
+func LongToShortHandler(mappings *shortURLMappings) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := Response{}
 
@@ -110,7 +100,7 @@ func LongToShortHandler(creator *shortURLCreator) gin.HandlerFunc {
 			return
 		}
 
-		shortKey, err := creator.Create(c.Request.Context(), longURL, req.ShortKey)
+		shortKey, err := mappings.Create(c.Request.Context(), longURL, req.ShortKey)
 		if errors.Is(err, errShortKeyExists) {
 			resp.Code = ResponseCodeParamsCheckError
 			resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"

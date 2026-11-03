@@ -135,8 +135,8 @@ MyUrls 支持通过命令行参数或环境变量进行配置。当两者同时�
 
 | 参数名 | 类型 | 必填 | 说明 |
 | :--- | :--- | :--- | :--- |
-| `longUrl` | string | 是 | 长链接。必须是带主机名的 `http` 或 `https` URL，支持明文或 Base64 编码格式 |
-| `shortKey` | string | 否 | 用户指定的短键，只能包含字母、数字、`-` 和 `_`。若留空，系统自动生成 7 位随机字符串 |
+| `longUrl` | string | 是 | 长链接。必须是带主机名的 `http` 或 `https` URL，最长 8192 个字符，不能指向本服务域名，支持明文或 Base64 编码格式（长度按解码后计算） |
+| `shortKey` | string | 否 | 用户指定的短键，只能包含字母、数字、`-` 和 `_`，最长 20 个字符，不能使用保留短键 `short`、`api` 和 `admin`。若留空，系统自动生成 7 位随机字符串 |
 
 #### 请求示例
 
@@ -182,6 +182,26 @@ curl -X POST https://example.com/short \
   }
   ```
 
+- **长链接过长**：
+
+  ```json
+  {
+    "Code": 1001,
+    "Message": "long URL is too long, at most 8192 characters are allowed",
+    "Data": null
+  }
+  ```
+
+- **长链接指向本服务域名**：
+
+  ```json
+  {
+    "Code": 1001,
+    "Message": "long URL must not point to this service",
+    "Data": null
+  }
+  ```
+
 - **短键无效**：
 
   ```json
@@ -192,7 +212,17 @@ curl -X POST https://example.com/short \
   }
   ```
 
-- **短键已被占用**（用户指定的 `shortKey` 已被一条有效映射占用）：
+- **短键过长**：
+
+  ```json
+  {
+    "Code": 1001,
+    "Message": "short key is too long, at most 20 characters are allowed",
+    "Data": null
+  }
+  ```
+
+- **短键已被占用**（用户指定的 `shortKey` 是保留短键，或已被一条有效映射占用）：
 
   ```json
   {

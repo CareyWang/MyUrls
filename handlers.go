@@ -1,38 +1,10 @@
 package main
 
 import (
-	"encoding/base64"
 	"errors"
-	"net/url"
-	"regexp"
 
 	"github.com/gin-gonic/gin"
 )
-
-// A dot-free short key cannot shadow a static file such as /logo.png.
-var shortKeyPattern = regexp.MustCompile(`^[0-9A-Za-z_-]+$`)
-
-func isHTTPURL(rawURL string) bool {
-	parsed, err := url.Parse(rawURL)
-	if err != nil {
-		return false
-	}
-	return (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
-}
-
-// normalizeLongURL returns the long URL from plain or legacy base64 input.
-func normalizeLongURL(input string) (string, bool) {
-	if isHTTPURL(input) {
-		return input, true
-	}
-
-	// 兼容以前的实现，这里如果是 base64 编码的字符串，进行解码
-	decoded, err := base64.StdEncoding.DecodeString(input)
-	if err == nil && isHTTPURL(string(decoded)) {
-		return string(decoded), true
-	}
-	return "", false
-}
 
 // ShortToLongHandler gets the long URL from a short URL
 func ShortToLongHandler(mappings *shortURLMappings) gin.HandlerFunc {
@@ -66,7 +38,7 @@ type LongToShortParams struct {
 }
 
 // LongToShortHandler creates a short URL from a long URL
-func LongToShortHandler(mappings *shortURLMappings) gin.HandlerFunc {
+func LongToShortHandler(creator *shortURLCreator) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		resp := Response{}
 
@@ -81,31 +53,13 @@ func LongToShortHandler(mappings *shortURLMappings) gin.HandlerFunc {
 			return
 		}
 
-		longURL, ok := normalizeLongURL(req.LongUrl)
-		if !ok {
+		shortURL, err := creator.Create(c.Request.Context(), req.LongUrl, req.ShortKey)
+		var inputErr creationInputError
+		if errors.As(err, &inputErr) {
 			resp.Code = ResponseCodeParamsCheckError
-			resp.Msg = "invalid long URL, only http and https URLs are supported"
+			resp.Msg = inputErr.Error()
 
-			logger.Info("invalid long URL: ", req.LongUrl)
-			c.JSON(200, resp)
-			return
-		}
-
-		if req.ShortKey != "" && !shortKeyPattern.MatchString(req.ShortKey) {
-			resp.Code = ResponseCodeParamsCheckError
-			resp.Msg = "invalid short key, only letters, digits, hyphens, and underscores are allowed"
-
-			logger.Info("invalid short key: ", req.ShortKey)
-			c.JSON(200, resp)
-			return
-		}
-
-		shortKey, err := mappings.Create(c.Request.Context(), longURL, req.ShortKey)
-		if errors.Is(err, errShortKeyExists) {
-			resp.Code = ResponseCodeParamsCheckError
-			resp.Msg = "short key already exists, please use another one or leave it empty to generate automatically"
-
-			logger.Info("short key already exists: ", req.ShortKey)
+			logger.Infof("%s: longUrl=%s shortKey=%s", inputErr, req.LongUrl, req.ShortKey)
 			c.JSON(200, resp)
 			return
 		}
@@ -118,8 +72,6 @@ func LongToShortHandler(mappings *shortURLMappings) gin.HandlerFunc {
 			c.JSON(200, resp)
 			return
 		}
-
-		shortURL := proto + "://" + domain + "/" + shortKey
 
 		// 兼容以前的返回结构体
 		respDataLegacy := gin.H{

@@ -5,57 +5,18 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"errors"
+	"mime/multipart"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
+	"strings"
 	"testing"
 
+	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
 )
-
-func TestLongToShortHandlerRejectsInvalidInput(t *testing.T) {
-	previousLogger := logger
-	logger = zap.NewNop().Sugar()
-	t.Cleanup(func() { logger = previousLogger })
-
-	const invalidLongURL = "invalid long URL, only http and https URLs are supported"
-	const invalidShortKey = "invalid short key, only letters, digits, hyphens, and underscores are allowed"
-	for _, tc := range []struct {
-		name        string
-		longURL     string
-		shortKey    string
-		wantMessage string
-	}{
-		{"plain text decodable as base64", "example/path", "", invalidLongURL},
-		{"missing scheme", "example.com", "", invalidLongURL},
-		{"javascript scheme", "javascript:alert(1)", "", invalidLongURL},
-		{"base64 javascript scheme", base64.StdEncoding.EncodeToString([]byte("javascript:alert(1)")), "", invalidLongURL},
-		{"missing host", "https://", "", invalidLongURL},
-		{"short key shadows static file", "https://example.com", "logo.png", invalidShortKey},
-		{"short key with slash", "https://example.com", "a/b", invalidShortKey},
-		{"short key with query", "https://example.com", "q?x", invalidShortKey},
-	} {
-		t.Run(tc.name, func(t *testing.T) {
-			server, mappings := newTestMappings(t)
-			body, err := json.Marshal(map[string]string{"longUrl": tc.longURL, "shortKey": tc.shortKey})
-			require.NoError(t, err)
-			request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
-			request.Header.Set("Content-Type", "application/json")
-			router := gin.New()
-			router.POST("/short", LongToShortHandler(mappings))
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, request)
-
-			require.Equal(t, http.StatusOK, response.Code)
-			expected, err := json.Marshal(Response{Code: ResponseCodeParamsCheckError, Msg: tc.wantMessage})
-			require.NoError(t, err)
-			require.JSONEq(t, string(expected), response.Body.String())
-			require.Empty(t, server.Keys())
-		})
-	}
-}
 
 func TestShortToLongHandler(t *testing.T) {
 	previousLogger := logger
@@ -87,77 +48,178 @@ func TestShortToLongHandler(t *testing.T) {
 	require.NotContains(t, response.Body.String(), "storage unavailable")
 }
 
-func TestLongToShortHandler(t *testing.T) {
+func postShort(t *testing.T, creator *shortURLCreator, contentType string, body []byte) *httptest.ResponseRecorder {
+	t.Helper()
+	request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
+	request.Header.Set("Content-Type", contentType)
+	router := gin.New()
+	router.POST("/short", LongToShortHandler(creator))
+	response := httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	return response
+}
+
+func postShortJSON(t *testing.T, creator *shortURLCreator, params map[string]string) *httptest.ResponseRecorder {
+	t.Helper()
+	body, err := json.Marshal(params)
+	require.NoError(t, err)
+	return postShort(t, creator, "application/json", body)
+}
+
+func TestLongToShortHandlerAcceptsSubmissionFormats(t *testing.T) {
 	previousLogger := logger
 	logger = zap.NewNop().Sugar()
 	t.Cleanup(func() { logger = previousLogger })
 
-	for _, name := range []string{"JSON", "legacy base64", "form", "generated key", "custom conflict", "retry exhaustion", "generation error", "storage error", "invalid parameters"} {
-		t.Run(name, func(t *testing.T) {
-			server, mappings := newTestMappings(t)
-			mappings.generateKey = func() (string, error) { return "autoKey", nil }
-			longURL := "https://example.com/path?a=1"
-			params := map[string]string{"longUrl": longURL, "shortKey": "custom"}
-			wantKey := "custom"
-			wantCode := ResponseCodeSuccessLegacy
-			wantMessage := ""
-			switch name {
-			case "legacy base64":
-				params["longUrl"] = base64.StdEncoding.EncodeToString([]byte(longURL))
-			case "generated key":
-				params["shortKey"] = ""
-				wantKey = "autoKey"
-			case "custom conflict":
-				require.NoError(t, server.Set("custom", "original"))
-				wantCode = ResponseCodeParamsCheckError
-				wantMessage = "short key already exists, please use another one or leave it empty to generate automatically"
-			case "retry exhaustion":
-				params["shortKey"] = ""
-				require.NoError(t, server.Set("autoKey", "original"))
-				wantCode = ResponseCodeServerError
-				wantMessage = "failed to create short URL"
-			case "storage error":
-				server.SetError("ERR storage unavailable")
-				wantCode = ResponseCodeServerError
-				wantMessage = "failed to create short URL"
-			case "generation error":
-				params["shortKey"] = ""
-				mappings.generateKey = func() (string, error) {
-					return "", errors.New("random source unavailable")
-				}
-				wantCode = ResponseCodeServerError
-				wantMessage = "failed to create short URL"
-			case "invalid parameters":
-				delete(params, "longUrl")
-				wantCode = ResponseCodeParamsCheckError
-				wantMessage = "invalid parameters"
-			}
+	const longURL = "https://example.com/path?a=1"
+	encoded := base64.StdEncoding.EncodeToString([]byte(longURL))
+	urlEncoded := func(longURLInput string) (string, []byte) {
+		return "application/x-www-form-urlencoded", []byte(url.Values{"longUrl": {longURLInput}, "shortKey": {"custom"}}.Encode())
+	}
+	jsonEncoded := func(longURLInput string) (string, []byte) {
+		body, err := json.Marshal(map[string]string{"longUrl": longURLInput, "shortKey": "custom"})
+		require.NoError(t, err)
+		return "application/json", body
+	}
+	// The built-in frontend posts a FormData with a btoa() long URL.
+	multipartEncoded := func(longURLInput string) (string, []byte) {
+		var body bytes.Buffer
+		writer := multipart.NewWriter(&body)
+		require.NoError(t, writer.WriteField("longUrl", longURLInput))
+		require.NoError(t, writer.WriteField("shortKey", "custom"))
+		require.NoError(t, writer.Close())
+		return writer.FormDataContentType(), body.Bytes()
+	}
 
-			body, err := json.Marshal(params)
-			require.NoError(t, err)
-			contentType := "application/json"
-			if name == "form" {
-				body = []byte(url.Values{"longUrl": {longURL}, "shortKey": {"custom"}}.Encode())
-				contentType = "application/x-www-form-urlencoded"
-			}
-			request := httptest.NewRequest(http.MethodPost, "/short", bytes.NewReader(body))
-			request.Header.Set("Content-Type", contentType)
-			router := gin.New()
-			router.POST("/short", LongToShortHandler(mappings))
-			response := httptest.NewRecorder()
-			router.ServeHTTP(response, request)
+	for _, tc := range []struct {
+		name   string
+		encode func(string) (string, []byte)
+		input  string
+	}{
+		{"plain JSON", jsonEncoded, longURL},
+		{"base64 JSON", jsonEncoded, encoded},
+		{"plain form", urlEncoded, longURL},
+		{"base64 form", urlEncoded, encoded},
+		{"built-in frontend", multipartEncoded, encoded},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, creator := newTestCreator(t)
+			contentType, body := tc.encode(tc.input)
+			response := postShort(t, creator, contentType, body)
 
 			require.Equal(t, http.StatusOK, response.Code)
-			if wantCode == ResponseCodeSuccessLegacy {
-				expected, err := json.Marshal(gin.H{"Code": 1, "ShortUrl": proto + "://" + domain + "/" + wantKey})
-				require.NoError(t, err)
-				require.JSONEq(t, string(expected), response.Body.String())
-				requireMapping(t, mappings, wantKey, longURL)
-			} else {
-				expected, err := json.Marshal(Response{Code: wantCode, Msg: wantMessage})
-				require.NoError(t, err)
-				require.JSONEq(t, string(expected), response.Body.String())
+			require.JSONEq(t, `{"Code": 1, "ShortUrl": "https://s.example.net/custom"}`, response.Body.String())
+			requireMapping(t, creator.mappings, "custom", longURL)
+		})
+	}
+}
+
+func TestLongToShortHandlerMapsFailures(t *testing.T) {
+	previousLogger := logger
+	logger = zap.NewNop().Sugar()
+	t.Cleanup(func() { logger = previousLogger })
+
+	const longURL = "https://example.com"
+	for _, tc := range []struct {
+		name        string
+		params      map[string]string
+		arrange     func(*testing.T, *miniredis.Miniredis, *shortURLCreator)
+		wantCode    int
+		wantMessage string
+	}{
+		{
+			name:        "missing long URL",
+			params:      map[string]string{"shortKey": "custom"},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "invalid parameters",
+		},
+		{
+			name:        "invalid long URL",
+			params:      map[string]string{"longUrl": "example.com"},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "invalid long URL, only http and https URLs are supported",
+		},
+		{
+			name:        "long URL over limit",
+			params:      map[string]string{"longUrl": longURL + "/" + strings.Repeat("a", maxLongURLLength)},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "long URL is too long, at most 8192 characters are allowed",
+		},
+		{
+			name:        "self-referencing long URL",
+			params:      map[string]string{"longUrl": "https://s.example.net/abc"},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "long URL must not point to this service",
+		},
+		{
+			name:        "invalid short key",
+			params:      map[string]string{"longUrl": longURL, "shortKey": "logo.png"},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "invalid short key, only letters, digits, hyphens, and underscores are allowed",
+		},
+		{
+			name:        "short key over limit",
+			params:      map[string]string{"longUrl": longURL, "shortKey": strings.Repeat("a", maxShortKeyLength+1)},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "short key is too long, at most 20 characters are allowed",
+		},
+		{
+			name:        "reserved short key",
+			params:      map[string]string{"longUrl": longURL, "shortKey": "short"},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "short key already exists, please use another one or leave it empty to generate automatically",
+		},
+		{
+			name:   "short key conflict",
+			params: map[string]string{"longUrl": longURL, "shortKey": "custom"},
+			arrange: func(t *testing.T, server *miniredis.Miniredis, _ *shortURLCreator) {
+				require.NoError(t, server.Set("custom", "original"))
+			},
+			wantCode:    ResponseCodeParamsCheckError,
+			wantMessage: "short key already exists, please use another one or leave it empty to generate automatically",
+		},
+		{
+			name:   "retry exhaustion",
+			params: map[string]string{"longUrl": longURL},
+			arrange: func(t *testing.T, server *miniredis.Miniredis, creator *shortURLCreator) {
+				require.NoError(t, server.Set("autoKey", "original"))
+				creator.mappings.generateKey = func() (string, error) { return "autoKey", nil }
+			},
+			wantCode:    ResponseCodeServerError,
+			wantMessage: "failed to create short URL",
+		},
+		{
+			name:   "generation error",
+			params: map[string]string{"longUrl": longURL},
+			arrange: func(_ *testing.T, _ *miniredis.Miniredis, creator *shortURLCreator) {
+				creator.mappings.generateKey = func() (string, error) {
+					return "", errors.New("random source unavailable")
+				}
+			},
+			wantCode:    ResponseCodeServerError,
+			wantMessage: "failed to create short URL",
+		},
+		{
+			name:   "storage error",
+			params: map[string]string{"longUrl": longURL, "shortKey": "custom"},
+			arrange: func(_ *testing.T, server *miniredis.Miniredis, _ *shortURLCreator) {
+				server.SetError("ERR storage unavailable")
+			},
+			wantCode:    ResponseCodeServerError,
+			wantMessage: "failed to create short URL",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			server, creator := newTestCreator(t)
+			if tc.arrange != nil {
+				tc.arrange(t, server, creator)
 			}
+			response := postShortJSON(t, creator, tc.params)
+
+			require.Equal(t, http.StatusOK, response.Code)
+			expected, err := json.Marshal(Response{Code: tc.wantCode, Msg: tc.wantMessage})
+			require.NoError(t, err)
+			require.JSONEq(t, string(expected), response.Body.String())
 		})
 	}
 }

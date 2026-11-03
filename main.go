@@ -87,11 +87,15 @@ func run() error {
 	// logger
 	router.Use(initServiceLogger())
 
-	registerPublicRoutes(router)
-
-	router.POST("/short", LongToShortHandler(mappings))
-	router.GET("/:shortKey", ShortToLongHandler(mappings))
+	registerRoutes(router, mappings, newShortURLCreator(mappings, proto, domain))
 
 	logger.Infof("server running on :%s", port)
 	return router.Run(fmt.Sprintf(":%s", port))
+}
+
+func registerRoutes(router *gin.Engine, mappings *shortURLMappings, creator *shortURLCreator) {
+	registerPublicRoutes(router)
+
+	router.POST("/short", LongToShortHandler(creator))
+	router.GET("/:shortKey", ShortToLongHandler(mappings))
 }

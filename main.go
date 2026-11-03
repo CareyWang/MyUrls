@@ -17,6 +17,13 @@ var (
 	proto         = "https"
 	redisAddr     = "localhost:6379"
 	redisPassword = ""
+	storageType   = storageTypeRedis
+	sqliteFile    = "./data/myurls.db"
+)
+
+const (
+	storageTypeRedis  = "redis"
+	storageTypeSQLite = "sqlite"
 )
 
 func init() {
@@ -27,6 +34,8 @@ func init() {
 	flag.StringVar(&proto, "proto", proto, "protocol of the server")
 	flag.StringVar(&redisAddr, "conn", redisAddr, "address of the redis server")
 	flag.StringVar(&redisPassword, "password", redisPassword, "password of the redis server")
+	flag.StringVar(&storageType, "storage-type", storageType, "mapping storage: redis or sqlite")
+	flag.StringVar(&sqliteFile, "sqlite-file", sqliteFile, "path of the sqlite database file")
 }
 
 func main() {
@@ -69,16 +78,37 @@ func parseEnvirons() {
 	if p := os.Getenv("MYURLS_REDIS_PASSWORD"); p != "" {
 		redisPassword = p
 	}
+	if t := os.Getenv("MYURLS_STORAGE_TYPE"); t != "" {
+		storageType = t
+	}
+	if f := os.Getenv("MYURLS_STORAGE_SQLITE_FILE"); f != "" {
+		sqliteFile = f
+	}
+}
+
+func newMappingStore() (mappingStore, error) {
+	switch storageType {
+	case storageTypeRedis:
+		return newRedisStore(redisAddr, redisPassword), nil
+	case storageTypeSQLite:
+		return newSQLiteStore(sqliteFile)
+	default:
+		return nil, fmt.Errorf("unsupported storage type %q", storageType)
+	}
 }
 
 func run() error {
-	// init and check redis
-	mappings := newShortURLMappings(newRedisStore(redisAddr, redisPassword))
+	// init and check storage
+	store, err := newMappingStore()
+	if err != nil {
+		return err
+	}
+	mappings := newShortURLMappings(store)
 	defer mappings.Close()
 	if err := mappings.Ping(context.Background()); err != nil {
-		return fmt.Errorf("redis ping failed: %w", err)
+		return fmt.Errorf("%s ping failed: %w", storageType, err)
 	}
-	logger.Info("redis ping success")
+	logger.Infof("%s ping success", storageType)
 
 	// init and run server
 	gin.SetMode(gin.ReleaseMode)

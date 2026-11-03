@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"path/filepath"
 	"syscall"
 	"testing"
 
@@ -15,8 +16,10 @@ import (
 func prepareRun(t *testing.T) {
 	t.Helper()
 	previousLogger, previousAddr, previousPort, previousMode := logger, redisAddr, port, gin.Mode()
+	previousStorageType, previousSQLiteFile := storageType, sqliteFile
 	t.Cleanup(func() {
 		logger, redisAddr, port = previousLogger, previousAddr, previousPort
+		storageType, sqliteFile = previousStorageType, previousSQLiteFile
 		gin.SetMode(previousMode)
 	})
 	t.Chdir(t.TempDir())
@@ -44,4 +47,29 @@ func TestRunReturnsRedisPingError(t *testing.T) {
 	server.Close()
 
 	require.ErrorContains(t, run(), "redis ping failed")
+}
+
+func TestRunWithSQLiteNeedsNoRedis(t *testing.T) {
+	prepareRun(t)
+
+	listener, err := net.Listen("tcp", ":0")
+	require.NoError(t, err)
+	t.Cleanup(func() { listener.Close() })
+
+	redisAddr = "127.0.0.1:1"
+	storageType = storageTypeSQLite
+	sqliteFile = filepath.Join(t.TempDir(), "nested", "myurls.db")
+	port = fmt.Sprint(listener.Addr().(*net.TCPAddr).Port)
+
+	// Reaching the listen error proves the storage came up.
+	require.ErrorIs(t, run(), syscall.EADDRINUSE)
+	require.FileExists(t, sqliteFile)
+}
+
+func TestRunRejectsUnsupportedStorageType(t *testing.T) {
+	prepareRun(t)
+
+	storageType = "memcached"
+
+	require.ErrorContains(t, run(), `unsupported storage type "memcached"`)
 }

@@ -50,10 +50,10 @@ func newSQLiteStore(file string) (*sqliteStore, error) {
 		return nil, fmt.Errorf("create sqlite directory: %w", err)
 	}
 	// These pragmas apply per connection, so they belong in the DSN of the pool.
-	dsn := url.URL{Scheme: "file", Path: file, RawQuery: fmt.Sprintf(
-		"_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)", sqliteBusyTimeoutMillis,
-	)}
-	db, err := sql.Open("sqlite", dsn.String())
+	// url.URL.String would read the first segment of a relative path as a host.
+	path := url.URL{Path: file}
+	dsn := fmt.Sprintf("file:%s?_pragma=busy_timeout(%d)&_pragma=journal_mode(WAL)", path.EscapedPath(), sqliteBusyTimeoutMillis)
+	db, err := sql.Open("sqlite", dsn)
 	if err != nil {
 		return nil, err
 	}

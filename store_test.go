@@ -225,6 +225,31 @@ func TestSQLiteStoreKeepsMappingsAcrossReopen(t *testing.T) {
 	requireStored(t, reopened, "key", "https://example.com")
 }
 
+func TestSQLiteStoreOpensFilePaths(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		file func(dir string) string
+	}{
+		{"default relative path", func(string) string { return sqliteFile }},
+		{"bare file name", func(string) string { return "myurls.db" }},
+		{"absolute path", func(dir string) string { return filepath.Join(dir, "myurls.db") }},
+		{"reserved URI characters", func(dir string) string { return filepath.Join(dir, "with space", "a?b#c%20.db") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			t.Chdir(dir)
+			file := tc.file(dir)
+
+			store, err := newSQLiteStore(file)
+			require.NoError(t, err)
+			t.Cleanup(func() { store.Close() })
+			_, err = store.Claim(context.Background(), "key", "https://example.com", 0)
+			require.NoError(t, err)
+			require.FileExists(t, file, "the database must be at the exact configured path")
+		})
+	}
+}
+
 func TestSQLiteStoreConfiguresEveryConnection(t *testing.T) {
 	store, _ := newTestSQLiteStore(t)
 	ctx := context.Background()
@@ -276,7 +301,7 @@ func TestSQLiteStoreOpensExistingSchema(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "myurls.db")
 	db, err := sql.Open("sqlite", file)
 	require.NoError(t, err)
-	_, err = db.Exec("CREATE TABLE `url_mappings` (`id` integer PRIMARY KEY AUTOINCREMENT,`key` text UNIQUE,`value` text NOT NULL,`expires_at` integer,`created_at` integer)")
+	_, err = db.Exec("CREATE TABLE `url_mappings` (`id` integer PRIMARY KEY AUTOINCREMENT,`key` text,`value` text NOT NULL,`expires_at` integer,`created_at` integer,CONSTRAINT `uni_url_mappings_key` UNIQUE (`key`))")
 	require.NoError(t, err)
 	_, err = db.Exec("INSERT INTO url_mappings (key, value, expires_at, created_at) VALUES ('old', 'https://example.com/old', NULL, 1)")
 	require.NoError(t, err)

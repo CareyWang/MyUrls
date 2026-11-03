@@ -33,7 +33,7 @@
 ## 不在范围内
 
 - 短键和长链接的校验规则，见[短链接创建规则](short-url-creation-rules.md)。
-- 引入 Redis interface 或 mock：目前只有一个生产 adapter，miniredis 已能覆盖测试需求。
+- 引入 Redis interface 或 mock：目前只有一个生产 adapter，miniredis 已能覆盖测试需求。（SQLite 加入后这个前提不再成立，接口的引入见[存储后端与解析缓存](storage-sqlite-cache.md)。）
 - 改变 HTTP 响应格式或现有映射的存储格式。
 
 ## 验收标准

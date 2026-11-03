@@ -1,6 +1,6 @@
 # MyUrls
 
-MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短、用户指定短键以及短链接重定向功能。前端页面与静态资源通过 Go `embed` 特性编译至单个二进制文件中，无需单独分发静态资源文件。
+MyUrls 是基于 Go 构建的短链接服务，使用 Redis 或 SQLite 存储映射，提供长链接缩短、用户指定短键以及短链接重定向功能。前端页面与静态资源通过 Go `embed` 特性编译至单个二进制文件中，无需单独分发静态资源文件。
 
 ## 目录
 
@@ -10,6 +10,10 @@ MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短�
   - [使用 Docker 运行](#使用-docker-运行)
   - [使用二进制文件运行](#使用二进制文件运行)
 - [配置说明](#配置说明)
+- [存储与缓存](#存储与缓存)
+  - [使用 SQLite](#使用-sqlite)
+  - [从 Redis 迁移到 SQLite](#从-redis-迁移到-sqlite)
+  - [解析缓存](#解析缓存)
 - [接口说明](#接口说明)
   - [创建短链接](#创建短链接)
   - [访问短链接](#访问短链接)
@@ -26,7 +30,7 @@ MyUrls 是基于 Go 与 Redis 构建的短链接服务，提供长链接缩短�
 
 运行 MyUrls 前，需要准备以下环境：
 
-- **Redis 服务**：用于存储长短链接的映射关系。
+- **Redis 服务**：默认用于存储长短链接的映射关系。如果[使用 SQLite](#使用-sqlite)，则不需要 Redis。
 - 若使用容器化部署，需要安装 Docker 及 Docker Compose。
 - 若从源码编译，需要安装 Go 1.27 或更高版本。
 
@@ -119,7 +123,72 @@ MyUrls 支持通过命令行参数或环境变量进行配置。当两者同时�
 | `-proto` | `MYURLS_PROTO` | `https` | 生成短链接所使用的 URL 协议（`http` 或 `https`） |
 | `-conn` | `MYURLS_REDIS_CONN` | `localhost:6379` | Redis 服务器连接地址（`host:port`） |
 | `-password` | `MYURLS_REDIS_PASSWORD` | `""` | Redis 认证密码 |
+| `-storage-type` | `MYURLS_STORAGE_TYPE` | `redis` | 映射存储类型（`redis` 或 `sqlite`） |
+| `-sqlite-file` | `MYURLS_STORAGE_SQLITE_FILE` | `./data/myurls.db` | SQLite 数据库文件路径，目录不存在时自动创建 |
+| `-cache-enabled` | `MYURLS_STORAGE_CACHE_ENABLED` | `false` | 是否启用解析缓存 |
+| `-cache-size` | `MYURLS_STORAGE_CACHE_SIZE` | `128` | 解析缓存最多保存的短链接数量 |
+| `-cache-ttl` | `MYURLS_STORAGE_CACHE_TTL` | `300` | 短链接在解析缓存中保存的最长秒数 |
 | `-h` | 无 | 无 | 打印命令行参数帮助信息并退出 |
+
+存储类型或缓存配置无效时，服务拒绝启动。
+
+## 存储与缓存
+
+### 使用 SQLite
+
+SQLite 把映射保存在单个文件中，无需额外服务：
+
+```bash
+./myurls-linux-amd64 -domain example.com -storage-type sqlite -sqlite-file ./data/myurls.db
+```
+
+使用 Docker Compose 时，在 `.env` 中设置 `MYURLS_STORAGE_TYPE=sqlite`，数据库文件保存在宿主机 `./data/myurls/db` 目录。Compose 仍会启动 Redis 容器，但服务不会使用它。
+
+SQLite 存储有以下限制：
+
+- 只支持单个服务实例。需要多实例部署时请使用 Redis。
+- 数据库文件使用 WAL 模式，不要放在 NFS 等网络文件系统上。
+
+### 从 Redis 迁移到 SQLite
+
+`sync-redis-to-sqlite` 子命令把 Redis 中的映射一次性复制到 SQLite：
+
+```bash
+./myurls-linux-amd64 sync-redis-to-sqlite -conn 127.0.0.1:6379 -sqlite-file ./data/myurls.db
+```
+
+使用 Docker Compose 时：
+
+```bash
+docker-compose run --rm --entrypoint /app/myurls myurls \
+  sync-redis-to-sqlite -conn myurls-redis:6379 -sqlite-file ./data/myurls.db
+```
+
+| 参数 | 环境变量 | 默认值 | 说明 |
+| :--- | :--- | :--- | :--- |
+| `-conn` | `MYURLS_REDIS_CONN` | `localhost:6379` | Redis 服务器连接地址 |
+| `-password` | `MYURLS_REDIS_PASSWORD` | `""` | Redis 认证密码 |
+| `-sqlite-file` | `MYURLS_STORAGE_SQLITE_FILE` | `./data/myurls.db` | SQLite 数据库文件路径 |
+| `-batch-size` | 无 | `200` | 每批扫描的 key 数量 |
+
+同步规则如下：
+
+- 保留每条映射的剩余有效期，没有过期时间的映射在 SQLite 中同样永不过期。
+- 不覆盖 SQLite 中仍然有效的映射，这类 key 计入跳过，因此可以重复执行。
+- 原样复制映射，不校验创建规则。
+- 结束时输出成功、跳过和失败的数量。只要有 key 同步失败（如非字符串类型的 key），命令就以非零退出码退出。
+
+建议在停止写入后执行。同步期间新创建的映射不一定会被复制，可在切换前再执行一次。
+
+### 解析缓存
+
+启用后，服务在内存中缓存解析结果，减少对存储的读取。缓存默认关闭，Redis 和 SQLite 都可以使用。
+
+缓存条目的保存时长取映射剩余有效期和 `-cache-ttl` 中较短的一个，所以不会在映射过期后继续跳转。启用后请注意：
+
+- 存储不可用时，已缓存的短链接仍会跳转。
+- 从存储中手动删除或修改映射后，旧结果最长还会保留 `-cache-ttl` 秒。需要立即生效时请重启服务。
+- 每个服务实例有各自的缓存。
 
 ## 接口说明
 
@@ -232,7 +301,7 @@ curl -X POST https://example.com/short \
   }
   ```
 
-- **服务端错误**（Redis 存储失败、重试次数超限或随机数生成失败）：
+- **服务端错误**（存储失败、重试次数超限或随机数生成失败）：
 
   ```json
   {
@@ -262,7 +331,7 @@ curl -X POST https://example.com/short \
   }
   ```
 
-- **服务端错误**（Redis 读取失败）：返回 HTTP 状态码 `500 Internal Server Error` 及 JSON 错误信息：
+- **服务端错误**（存储读取失败）：返回 HTTP 状态码 `500 Internal Server Error` 及 JSON 错误信息：
 
   ```json
   {
@@ -281,8 +350,8 @@ curl -X POST https://example.com/short \
 ### 短键生成与冲突重试
 
 - 当用户未指定 `shortKey` 时，系统基于 `crypto/rand` 随机源从 `[0-9a-zA-Z]` 字符集中生成 7 位长度的字符串。
-- 系统使用 Redis `SETNX` 进行原子写入。若生成的新短键已存在，最多重试 3 次（连同初次生成共最多尝试 4 次）。
-- 重试机制仅针对短键冲突触发；若在生成过程中发生底层随机数错误或 Redis 存储连接异常，系统立即中断并返回错误码 `1002`，不继续重试。
+- 系统以原子方式写入（Redis 使用 `SETNX`，SQLite 使用条件 upsert）。若生成的新短键已存在，最多重试 3 次（连同初次生成共最多尝试 4 次）。
+- 重试机制仅针对短键冲突触发；若在生成过程中发生底层随机数错误或存储连接异常，系统立即中断并返回错误码 `1002`，不继续重试。
 
 ### 有效期与防覆盖规则
 
@@ -359,7 +428,7 @@ logrotate -d /etc/logrotate.d/myurls
 
 ## 测试
 
-项目测试套件基于 `miniredis` 实现了全隔离的内存 Redis 测试环境，执行测试无需连接外部 Redis 实例。
+项目测试套件基于 `miniredis` 和临时 SQLite 文件实现了全隔离的测试环境，存储的共同行为在两种后端上都会运行，执行测试无需连接外部 Redis 实例。
 
 运行单元测试及并发竞态检测：
 

@@ -73,7 +73,7 @@ func parseEnvirons() {
 
 func run() error {
 	// init and check redis
-	mappings := newShortURLMappings(redisAddr, redisPassword)
+	mappings := newShortURLMappings(newRedisStore(redisAddr, redisPassword))
 	defer mappings.Close()
 	if err := mappings.Ping(context.Background()); err != nil {
 		return fmt.Errorf("redis ping failed: %w", err)

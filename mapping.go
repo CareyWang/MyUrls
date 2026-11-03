@@ -6,8 +6,6 @@ import (
 	"errors"
 	"math/big"
 	"time"
-
-	"github.com/redis/go-redis/v9"
 )
 
 const (
@@ -23,31 +21,37 @@ var (
 	errShortURLNotFound         = errors.New("short URL not found")
 )
 
+// mappingStore is a storage backend for mappings.
+type mappingStore interface {
+	// Claim stores a mapping unless a valid one holds the short key, and reports
+	// whether it did. A zero ttl stores a mapping that never expires.
+	// An uncertain write must return an error, not false.
+	Claim(ctx context.Context, shortKey, longURL string, ttl time.Duration) (bool, error)
+	// Resolve returns errShortURLNotFound when no valid mapping exists.
+	Resolve(ctx context.Context, shortKey string) (string, error)
+	Ping(ctx context.Context) error
+	Close() error
+}
+
 // shortURLMappings stores the mappings from short keys to long URLs.
 type shortURLMappings struct {
-	client         *redis.Client
-	creationClient *redis.Client
-	generateKey    func() (string, error)
+	store       mappingStore
+	generateKey func() (string, error)
 }
 
 // newShortURLMappings returns mappings that callers must close.
-func newShortURLMappings(addr, password string) *shortURLMappings {
-	return &shortURLMappings{
-		client: redis.NewClient(&redis.Options{Addr: addr, Password: password}),
-		// Replaying SET NX after a lost reply can turn our own write into a collision.
-		creationClient: redis.NewClient(&redis.Options{Addr: addr, Password: password, MaxRetries: -1}),
-		generateKey:    generateShortKey,
-	}
+func newShortURLMappings(store mappingStore) *shortURLMappings {
+	return &shortURLMappings{store: store, generateKey: generateShortKey}
 }
 
-// Close releases the connections of both clients.
+// Close releases the storage.
 func (m *shortURLMappings) Close() error {
-	return errors.Join(m.client.Close(), m.creationClient.Close())
+	return m.store.Close()
 }
 
 // Ping checks that the mapping storage is reachable.
 func (m *shortURLMappings) Ping(ctx context.Context) error {
-	return m.client.Ping(ctx).Err()
+	return m.store.Ping(ctx)
 }
 
 // Create stores a long URL under an unused short key for one year.
@@ -67,8 +71,7 @@ func (m *shortURLMappings) Create(ctx context.Context, longURL, shortKey string)
 			}
 		}
 
-		// Claim the key and set its expiration atomically, without overwriting it.
-		created, err := m.creationClient.SetNX(ctx, shortKey, longURL, defaultTTL).Result()
+		created, err := m.store.Claim(ctx, shortKey, longURL, defaultTTL)
 		if err != nil {
 			return "", err
 		}
@@ -85,11 +88,7 @@ func (m *shortURLMappings) Create(ctx context.Context, longURL, shortKey string)
 // Resolve returns the long URL of a short key.
 // It returns errShortURLNotFound when no valid mapping exists.
 func (m *shortURLMappings) Resolve(ctx context.Context, shortKey string) (string, error) {
-	longURL, err := m.client.Get(ctx, shortKey).Result()
-	if errors.Is(err, redis.Nil) {
-		return "", errShortURLNotFound
-	}
-	return longURL, err
+	return m.store.Resolve(ctx, shortKey)
 }
 
 func generateShortKey() (string, error) {

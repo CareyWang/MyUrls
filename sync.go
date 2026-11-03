@@ -10,7 +10,7 @@ import (
 
 const (
 	syncRedisToSQLiteCommand = "sync-redis-to-sqlite"
-	defaultSyncBatchSize     = 200
+	syncBatchSize            = 200
 )
 
 // syncResult counts the keys seen by a sync. A skipped key is already held by a
@@ -21,20 +21,15 @@ type syncResult struct {
 
 // runSyncRedisToSQLite copies mappings once and fails if any key could not be copied.
 func runSyncRedisToSQLite(args []string) error {
-	batchSize := defaultSyncBatchSize
 	flags := flag.NewFlagSet(syncRedisToSQLiteCommand, flag.ContinueOnError)
 	flags.StringVar(&redisAddr, "conn", redisAddr, "address of the redis server")
 	flags.StringVar(&redisPassword, "password", redisPassword, "password of the redis server")
 	flags.StringVar(&sqliteFile, "sqlite-file", sqliteFile, "path of the sqlite database file")
-	flags.IntVar(&batchSize, "batch-size", batchSize, "number of keys to scan per batch")
 	if err := flags.Parse(args); err != nil {
 		if errors.Is(err, flag.ErrHelp) {
 			return nil
 		}
 		return err
-	}
-	if batchSize <= 0 {
-		return fmt.Errorf("batch size must be positive, got %d", batchSize)
 	}
 
 	// 环境变量优先级高于命令行参数，与主程序保持一致
@@ -55,7 +50,7 @@ func runSyncRedisToSQLite(args []string) error {
 	}
 	defer target.Close()
 
-	result, err := syncMappings(ctx, source, target, batchSize)
+	result, err := syncMappings(ctx, source, target, syncBatchSize)
 	logger.Infof("sync finished: %d synced, %d skipped, %d failed", result.synced, result.skipped, result.failed)
 	if err != nil {
 		return err

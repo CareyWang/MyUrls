@@ -169,7 +169,6 @@ docker-compose run --rm --entrypoint /app/myurls myurls \
 | `-conn` | `MYURLS_REDIS_CONN` | `localhost:6379` | Redis 服务器连接地址 |
 | `-password` | `MYURLS_REDIS_PASSWORD` | `""` | Redis 认证密码 |
 | `-sqlite-file` | `MYURLS_STORAGE_SQLITE_FILE` | `./data/myurls.db` | SQLite 数据库文件路径 |
-| `-batch-size` | 无 | `200` | 每批扫描的 key 数量 |
 
 同步规则如下：
 

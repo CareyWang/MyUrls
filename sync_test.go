@@ -157,9 +157,3 @@ func TestRunSyncRedisToSQLiteFailsWithoutRedis(t *testing.T) {
 	require.ErrorContains(t, err, "redis ping failed")
 	require.NoFileExists(t, file)
 }
-
-func TestRunSyncRedisToSQLiteRejectsInvalidBatchSize(t *testing.T) {
-	prepareSyncCommand(t)
-
-	require.ErrorContains(t, runSyncRedisToSQLite([]string{"-batch-size", "0"}), "batch size must be positive")
-}

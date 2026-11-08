@@ -11,10 +11,23 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestCreator(t testing.TB) (*miniredis.Miniredis, *shortURLCreator) {
+// newTestCreatorAt returns a creator over Redis and the store it claims through,
+// which counts the claims that reach it.
+func newTestCreatorAt(t testing.TB, proto, domain string) (*shortURLCreator, *countingStore) {
 	t.Helper()
-	server, mappings := newTestMappings(t)
-	return server, newShortURLCreator(mappings, "https", "s.example.net")
+	store := &countingStore{mappingStore: newRedisStore(miniredis.RunT(t).Addr(), "")}
+	mappings := newShortURLMappings(store, nil)
+	t.Cleanup(func() {
+		if err := mappings.Close(); err != nil {
+			t.Errorf("close short URL mappings: %v", err)
+		}
+	})
+	return newShortURLCreator(mappings, proto, domain), store
+}
+
+func newTestCreator(t testing.TB) (*shortURLCreator, *countingStore) {
+	t.Helper()
+	return newTestCreatorAt(t, "https", "s.example.net")
 }
 
 func encodeBase64(s string) string {
@@ -45,11 +58,11 @@ func TestCreatorRejectsInvalidInput(t *testing.T) {
 		{"short key reserved for admin", validLongURL, "admin", errShortKeyTaken},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, creator := newTestCreator(t)
+			creator, store := newTestCreator(t)
 			shortURL, err := creator.Create(context.Background(), tc.longURL, tc.shortKey)
 			require.ErrorIs(t, err, tc.wantErr)
 			require.Empty(t, shortURL)
-			require.Empty(t, server.Keys())
+			require.Zero(t, store.claims, "a rejected request must not reach the store")
 		})
 	}
 }
@@ -76,14 +89,13 @@ func TestCreatorRejectsLongURLsPointingToItself(t *testing.T) {
 		{"domain in path", "https", "s.example.net", "https://example.com/s.example.net", nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, mappings := newTestMappings(t)
-			creator := newShortURLCreator(mappings, tc.proto, tc.domain)
+			creator, store := newTestCreatorAt(t, tc.proto, tc.domain)
 			_, err := creator.Create(context.Background(), tc.longURL, "custom")
 			require.ErrorIs(t, err, tc.wantErr)
 			if tc.wantErr != nil {
-				require.Empty(t, server.Keys())
+				require.Zero(t, store.claims, "a rejected request must not reach the store")
 			} else {
-				requireMapping(t, mappings, "custom", tc.longURL)
+				requireMapping(t, creator.mappings, "custom", tc.longURL)
 			}
 		})
 	}
@@ -104,7 +116,7 @@ func TestCreatorStoresNormalizedLongURL(t *testing.T) {
 		{"base64 at length limit", encodeBase64(maxLengthURL), maxLengthURL},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, creator := newTestCreator(t)
+			creator, _ := newTestCreator(t)
 			_, err := creator.Create(context.Background(), tc.input, "custom")
 			require.NoError(t, err)
 			requireMapping(t, creator.mappings, "custom", tc.wantURL)
@@ -125,20 +137,19 @@ func TestCreatorBuildsShortURL(t *testing.T) {
 		{"generated key", "", "autoKey"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, mappings := newTestMappings(t)
-			mappings.generateKey = func() (string, error) { return "autoKey", nil }
-			creator := newShortURLCreator(mappings, "http", "s.example.net:8080")
+			creator, _ := newTestCreatorAt(t, "http", "s.example.net:8080")
+			creator.mappings.generateKey = func() (string, error) { return "autoKey", nil }
 			shortURL, err := creator.Create(context.Background(), "https://example.com", tc.shortKey)
 			require.NoError(t, err)
 			require.Equal(t, "http://s.example.net:8080/"+tc.wantKey, shortURL)
-			requireMapping(t, mappings, tc.wantKey, "https://example.com")
+			requireMapping(t, creator.mappings, tc.wantKey, "https://example.com")
 		})
 	}
 }
 
 func TestCreatorReportsShortKeyConflict(t *testing.T) {
-	server, creator := newTestCreator(t)
-	require.NoError(t, server.Set("custom", "https://example.com/original"))
+	creator, _ := newTestCreator(t)
+	seedMapping(t, creator.mappings.store, "custom", "https://example.com/original", permanentLifetime)
 	shortURL, err := creator.Create(context.Background(), "https://example.com/new", "custom")
 	require.ErrorIs(t, err, errShortKeyTaken)
 	require.Empty(t, shortURL)
@@ -146,13 +157,13 @@ func TestCreatorReportsShortKeyConflict(t *testing.T) {
 }
 
 func TestCreationRulesDoNotAffectExistingMappings(t *testing.T) {
-	server, creator := newTestCreator(t)
-	require.NoError(t, server.Set("short", "javascript:alert(1)"))
+	creator, _ := newTestCreator(t)
+	seedMapping(t, creator.mappings.store, "short", "javascript:alert(1)", permanentLifetime)
 	requireMapping(t, creator.mappings, "short", "javascript:alert(1)")
 }
 
 func TestRegisteredRoutesCannotBeShortKeys(t *testing.T) {
-	_, creator := newTestCreator(t)
+	creator, _ := newTestCreator(t)
 	router := gin.New()
 	registerRoutes(router, creator.mappings, creator)
 

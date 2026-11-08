@@ -87,10 +87,16 @@ func TestResolveCacheConcurrentUse(t *testing.T) {
 	require.LessOrEqual(t, cache.order.Len(), 8)
 }
 
-// countingStore counts reads.
+// countingStore counts reads and claims.
 type countingStore struct {
 	mappingStore
 	resolves int
+	claims   int
+}
+
+func (s *countingStore) Claim(ctx context.Context, shortKey, longURL string, life lifetime) (bool, error) {
+	s.claims++
+	return s.mappingStore.Claim(ctx, shortKey, longURL, life)
 }
 
 func (s *countingStore) Resolve(ctx context.Context, shortKey string) (string, lifetime, error) {

@@ -241,28 +241,6 @@ func TestStoreReportsFailureAsErrorNotAbsence(t *testing.T) {
 	})
 }
 
-func TestMappingsRetryCollisionsOnEveryStore(t *testing.T) {
-	forEachStore(t, func(t *testing.T, store mappingStore, _ func(time.Duration)) {
-		ctx := context.Background()
-		_, err := store.Claim(ctx, "taken", "https://example.com/original", remainingLifetime(time.Hour))
-		require.NoError(t, err)
-
-		mappings := &shortURLMappings{store: store}
-		candidates := []string{"taken", "fresh"}
-		mappings.generateKey = func() (string, error) {
-			key := candidates[0]
-			candidates = candidates[1:]
-			return key, nil
-		}
-
-		key, err := mappings.Create(ctx, "https://example.com/new", "")
-		require.NoError(t, err)
-		require.Equal(t, "fresh", key)
-		requireStored(t, store, "taken", "https://example.com/original")
-		requireStored(t, store, "fresh", "https://example.com/new")
-	})
-}
-
 func TestSQLiteStoreKeepsMappingsAcrossReopen(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "nested", "dir", "myurls.db")
 	store, err := newSQLiteStore(file)

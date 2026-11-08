@@ -91,7 +91,7 @@ func TestCreateShortURLLostReply(t *testing.T) {
 		t.Run(fmt.Sprintf("key=%q", requestedKey), func(t *testing.T) {
 			server := miniredis.RunT(t)
 			proxy := newLostReplyProxy(t, server.Addr(), "set")
-			mappings := newTestMappingsAt(t, proxy.listener.Addr().String())
+			mappings := newTestRedisMappingsAt(t, proxy.listener.Addr().String())
 			generated := 0
 			mappings.generateKey = func() (string, error) {
 				generated++
@@ -119,7 +119,7 @@ func TestResolveShortURLRetriesLostReply(t *testing.T) {
 	server := miniredis.RunT(t)
 	require.NoError(t, server.Set("custom", "https://example.com"))
 	proxy := newLostReplyProxy(t, server.Addr(), "get")
-	mappings := newTestMappingsAt(t, proxy.listener.Addr().String())
+	mappings := newTestRedisMappingsAt(t, proxy.listener.Addr().String())
 
 	longURL, err := mappings.Resolve(context.Background(), "custom")
 	require.True(t, proxy.dropped.Load(), "the test must discard a GET reply")

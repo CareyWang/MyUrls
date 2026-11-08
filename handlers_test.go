@@ -12,7 +12,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/alicebob/miniredis/v2"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"go.uber.org/zap"
@@ -23,8 +22,8 @@ func TestShortToLongHandler(t *testing.T) {
 	logger = zap.NewNop().Sugar()
 	t.Cleanup(func() { logger = previousLogger })
 
-	server, mappings := newTestMappings(t)
-	require.NoError(t, server.Set("custom", "https://example.com"))
+	mappings := newTestMappings(t)
+	seedMapping(t, mappings.store, "custom", "https://example.com", permanentLifetime)
 	router := gin.New()
 	router.GET("/:shortKey", ShortToLongHandler(mappings))
 	get := func(path string) *httptest.ResponseRecorder {
@@ -41,7 +40,7 @@ func TestShortToLongHandler(t *testing.T) {
 	require.Equal(t, http.StatusNotFound, response.Code)
 	require.Contains(t, response.Body.String(), "exists or expired")
 
-	server.SetError("ERR storage unavailable")
+	failStorage(mappings)
 	response = get("/custom")
 	require.Equal(t, http.StatusInternalServerError, response.Code)
 	require.NotContains(t, response.Body.String(), "exists or expired")
@@ -103,7 +102,7 @@ func TestLongToShortHandlerAcceptsSubmissionFormats(t *testing.T) {
 		{"built-in frontend", multipartEncoded, encoded},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			_, creator := newTestCreator(t)
+			creator, _ := newTestCreator(t)
 			contentType, body := tc.encode(tc.input)
 			response := postShort(t, creator, contentType, body)
 
@@ -124,7 +123,7 @@ func TestLongToShortHandlerBoundsRequestBody(t *testing.T) {
 	longest := prefix + strings.Repeat("😀", maxLongURLLength-len(prefix))
 	for name, input := range map[string]string{"plain": longest, "base64": encodeBase64(longest)} {
 		t.Run(name, func(t *testing.T) {
-			_, creator := newTestCreator(t)
+			creator, _ := newTestCreator(t)
 			body := []byte(url.Values{"longUrl": {input}}.Encode())
 			response := postShort(t, creator, "application/x-www-form-urlencoded", body)
 			require.Contains(t, response.Body.String(), `"ShortUrl"`)
@@ -132,7 +131,7 @@ func TestLongToShortHandlerBoundsRequestBody(t *testing.T) {
 	}
 
 	// A larger body is rejected while reading, before the length rule runs.
-	_, creator := newTestCreator(t)
+	creator, _ := newTestCreator(t)
 	response := postShortJSON(t, creator, map[string]string{"longUrl": prefix + strings.Repeat("a", maxShortRequestBytes)})
 	require.Equal(t, http.StatusOK, response.Code)
 	require.Contains(t, response.Body.String(), `"Message":"invalid parameters"`)
@@ -147,7 +146,7 @@ func TestLongToShortHandlerMapsFailures(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
 		params      map[string]string
-		arrange     func(*testing.T, *miniredis.Miniredis, *shortURLCreator)
+		arrange     func(*testing.T, *shortURLCreator)
 		wantCode    int
 		wantMessage string
 	}{
@@ -196,8 +195,8 @@ func TestLongToShortHandlerMapsFailures(t *testing.T) {
 		{
 			name:   "short key conflict",
 			params: map[string]string{"longUrl": longURL, "shortKey": "custom"},
-			arrange: func(t *testing.T, server *miniredis.Miniredis, _ *shortURLCreator) {
-				require.NoError(t, server.Set("custom", "original"))
+			arrange: func(t *testing.T, creator *shortURLCreator) {
+				seedMapping(t, creator.mappings.store, "custom", "original", permanentLifetime)
 			},
 			wantCode:    ResponseCodeParamsCheckError,
 			wantMessage: "short key already exists, please use another one or leave it empty to generate automatically",
@@ -205,8 +204,8 @@ func TestLongToShortHandlerMapsFailures(t *testing.T) {
 		{
 			name:   "retry exhaustion",
 			params: map[string]string{"longUrl": longURL},
-			arrange: func(t *testing.T, server *miniredis.Miniredis, creator *shortURLCreator) {
-				require.NoError(t, server.Set("autoKey", "original"))
+			arrange: func(t *testing.T, creator *shortURLCreator) {
+				seedMapping(t, creator.mappings.store, "autoKey", "original", permanentLifetime)
 				creator.mappings.generateKey = func() (string, error) { return "autoKey", nil }
 			},
 			wantCode:    ResponseCodeServerError,
@@ -215,7 +214,7 @@ func TestLongToShortHandlerMapsFailures(t *testing.T) {
 		{
 			name:   "generation error",
 			params: map[string]string{"longUrl": longURL},
-			arrange: func(_ *testing.T, _ *miniredis.Miniredis, creator *shortURLCreator) {
+			arrange: func(_ *testing.T, creator *shortURLCreator) {
 				creator.mappings.generateKey = func() (string, error) {
 					return "", errors.New("random source unavailable")
 				}
@@ -226,17 +225,17 @@ func TestLongToShortHandlerMapsFailures(t *testing.T) {
 		{
 			name:   "storage error",
 			params: map[string]string{"longUrl": longURL, "shortKey": "custom"},
-			arrange: func(_ *testing.T, server *miniredis.Miniredis, _ *shortURLCreator) {
-				server.SetError("ERR storage unavailable")
+			arrange: func(_ *testing.T, creator *shortURLCreator) {
+				failStorage(creator.mappings)
 			},
 			wantCode:    ResponseCodeServerError,
 			wantMessage: "failed to create short URL",
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, creator := newTestCreator(t)
+			creator, _ := newTestCreator(t)
 			if tc.arrange != nil {
-				tc.arrange(t, server, creator)
+				tc.arrange(t, creator)
 			}
 			response := postShortJSON(t, creator, tc.params)
 

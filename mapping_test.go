@@ -14,7 +14,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func newTestMappingsAt(t testing.TB, addr string) *shortURLMappings {
+var errStorageDown = errors.New("storage unavailable")
+
+func newTestRedisMappingsAt(t testing.TB, addr string) *shortURLMappings {
 	t.Helper()
 	mappings := newShortURLMappings(newRedisStore(addr, ""), nil)
 	t.Cleanup(func() {
@@ -25,10 +27,51 @@ func newTestMappingsAt(t testing.TB, addr string) *shortURLMappings {
 	return mappings
 }
 
-func newTestMappings(t testing.TB) (*miniredis.Miniredis, *shortURLMappings) {
+// newTestMappings returns mappings over Redis, the production default, for tests
+// whose behavior does not depend on the store.
+func newTestMappings(t testing.TB) *shortURLMappings {
 	t.Helper()
-	server := miniredis.RunT(t)
-	return server, newTestMappingsAt(t, server.Addr())
+	return newTestRedisMappingsAt(t, miniredis.RunT(t).Addr())
+}
+
+// forEachMappings runs a behavior that mappings must show on every storage
+// backend. advance moves the backend's clock forward. forEachStore closes the
+// store, so the test must not close the mappings.
+func forEachMappings(t *testing.T, test func(t *testing.T, mappings *shortURLMappings, advance func(time.Duration))) {
+	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
+		test(t, newShortURLMappings(store, nil), advance)
+	})
+}
+
+// failingStore fails every call except Close, to simulate a storage outage.
+type failingStore struct {
+	mappingStore
+	err error
+}
+
+func (s *failingStore) Claim(context.Context, string, string, lifetime) (bool, error) {
+	return false, s.err
+}
+
+func (s *failingStore) Resolve(context.Context, string) (string, lifetime, error) {
+	return "", lifetime{}, s.err
+}
+
+func (s *failingStore) Ping(context.Context) error {
+	return s.err
+}
+
+// failStorage makes every later call of the mappings to its store fail.
+func failStorage(mappings *shortURLMappings) {
+	mappings.store = &failingStore{mappingStore: mappings.store, err: errStorageDown}
+}
+
+// seedMapping stores a mapping the way another service instance would.
+func seedMapping(t testing.TB, store mappingStore, shortKey, longURL string, life lifetime) {
+	t.Helper()
+	claimed, err := store.Claim(context.Background(), shortKey, longURL, life)
+	require.NoError(t, err)
+	require.True(t, claimed)
 }
 
 func requireMapping(t testing.TB, mappings *shortURLMappings, shortKey, wantLongURL string) {
@@ -36,6 +79,12 @@ func requireMapping(t testing.TB, mappings *shortURLMappings, shortKey, wantLong
 	longURL, err := mappings.Resolve(context.Background(), shortKey)
 	require.NoError(t, err)
 	require.Equal(t, wantLongURL, longURL)
+}
+
+func requireNotFound(t testing.TB, mappings *shortURLMappings, shortKey string) {
+	t.Helper()
+	_, err := mappings.Resolve(context.Background(), shortKey)
+	require.ErrorIs(t, err, errShortURLNotFound)
 }
 
 type capturedRedisLogs struct {
@@ -54,7 +103,7 @@ func TestNewShortURLMappingsInitializesBothClientsCleanly(t *testing.T) {
 	captured := &capturedRedisLogs{}
 	redis.SetLogger(captured)
 
-	_, mappings := newTestMappings(t)
+	mappings := newTestMappings(t)
 	require.NoError(t, mappings.Ping(context.Background()))
 	_, err := mappings.Create(context.Background(), "https://example.com", "custom")
 	require.NoError(t, err)
@@ -65,28 +114,39 @@ func TestNewShortURLMappingsInitializesBothClientsCleanly(t *testing.T) {
 }
 
 func TestPingShortURLMappings(t *testing.T) {
-	server, mappings := newTestMappings(t)
-	ctx := context.Background()
-	require.NoError(t, mappings.Ping(ctx))
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		require.NoError(t, mappings.Ping(context.Background()))
+	})
+}
 
-	server.SetError("ERR storage unavailable")
-	require.EqualError(t, mappings.Ping(ctx), "ERR storage unavailable")
+func TestPingShortURLMappingsReportsStorageFailure(t *testing.T) {
+	mappings := newTestMappings(t)
+	failStorage(mappings)
+	require.ErrorIs(t, mappings.Ping(context.Background()), errStorageDown)
 }
 
 func TestResolveShortURL(t *testing.T) {
-	server, mappings := newTestMappings(t)
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		ctx := context.Background()
+		key, err := mappings.Create(ctx, "https://example.com", "testKey")
+		require.NoError(t, err)
+		requireMapping(t, mappings, key, "https://example.com")
+
+		longURL, err := mappings.Resolve(ctx, "missing")
+		require.ErrorIs(t, err, errShortURLNotFound)
+		require.Empty(t, longURL)
+	})
+}
+
+func TestResolveShortURLReportsStorageFailure(t *testing.T) {
+	mappings := newTestMappings(t)
 	ctx := context.Background()
 	key, err := mappings.Create(ctx, "https://example.com", "testKey")
 	require.NoError(t, err)
-	requireMapping(t, mappings, key, "https://example.com")
 
-	longURL, err := mappings.Resolve(ctx, "missing")
-	require.ErrorIs(t, err, errShortURLNotFound)
-	require.Empty(t, longURL)
-
-	server.SetError("ERR storage unavailable")
-	longURL, err = mappings.Resolve(ctx, key)
-	require.EqualError(t, err, "ERR storage unavailable")
+	failStorage(mappings)
+	longURL, err := mappings.Resolve(ctx, key)
+	require.ErrorIs(t, err, errStorageDown)
 	require.NotErrorIs(t, err, errShortURLNotFound)
 	require.Empty(t, longURL)
 }
@@ -94,30 +154,31 @@ func TestResolveShortURL(t *testing.T) {
 func TestCreateShortURLExpiration(t *testing.T) {
 	for _, requestedKey := range []string{"custom", ""} {
 		t.Run(fmt.Sprintf("key=%q", requestedKey), func(t *testing.T) {
-			server, mappings := newTestMappings(t)
-			ctx := context.Background()
-			key, err := mappings.Create(ctx, "https://example.com/original", requestedKey)
-			require.NoError(t, err)
-			if requestedKey == "" {
-				require.Regexp(t, `^[0-9a-zA-Z]{7}$`, key)
-			} else {
-				require.Equal(t, requestedKey, key)
-			}
-			requireMapping(t, mappings, key, "https://example.com/original")
-			require.Equal(t, 365*24*time.Hour, server.TTL(key))
+			forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, advance func(time.Duration)) {
+				ctx := context.Background()
+				key, err := mappings.Create(ctx, "https://example.com/original", requestedKey)
+				require.NoError(t, err)
+				if requestedKey == "" {
+					require.Regexp(t, `^[0-9a-zA-Z]{7}$`, key)
+				} else {
+					require.Equal(t, requestedKey, key)
+				}
+				requireMapping(t, mappings, key, "https://example.com/original")
 
-			server.FastForward(time.Hour)
-			_, err = mappings.Create(ctx, "https://example.com/replacement", key)
-			require.ErrorIs(t, err, errShortKeyExists)
-			requireMapping(t, mappings, key, "https://example.com/original")
-			require.Equal(t, 365*24*time.Hour-time.Hour, server.TTL(key))
+				advance(time.Hour)
+				_, err = mappings.Create(ctx, "https://example.com/replacement", key)
+				require.ErrorIs(t, err, errShortKeyExists)
+				requireMapping(t, mappings, key, "https://example.com/original")
 
-			server.FastForward(365*24*time.Hour - time.Hour)
-			_, err = mappings.Resolve(ctx, key)
-			require.ErrorIs(t, err, errShortURLNotFound)
-			_, err = mappings.Create(ctx, "https://example.com/replacement", key)
-			require.NoError(t, err)
-			requireMapping(t, mappings, key, "https://example.com/replacement")
+				advance(365*24*time.Hour - time.Hour - time.Second)
+				requireMapping(t, mappings, key, "https://example.com/original")
+
+				advance(time.Second)
+				requireNotFound(t, mappings, key)
+				_, err = mappings.Create(ctx, "https://example.com/replacement", key)
+				require.NoError(t, err)
+				requireMapping(t, mappings, key, "https://example.com/replacement")
+			})
 		})
 	}
 }
@@ -134,119 +195,125 @@ func TestCreateShortURLCollisionRetries(t *testing.T) {
 		{name: "three retries exhausted", collisions: 4, wantCalls: 4, wantErr: errShortKeyRetriesExhausted},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			server, mappings := newTestMappings(t)
-			ctx := context.Background()
-			require.NoError(t, server.Set("taken", "https://example.com/original"))
-			server.SetTTL("taken", time.Hour)
-			calls := 0
-			mappings.generateKey = func() (string, error) {
-				calls++
-				if calls <= tc.collisions {
-					return "taken", nil
+			forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+				ctx := context.Background()
+				seedMapping(t, mappings.store, "taken", "https://example.com/original", remainingLifetime(time.Hour))
+				calls := 0
+				mappings.generateKey = func() (string, error) {
+					calls++
+					if calls <= tc.collisions {
+						return "taken", nil
+					}
+					return "fresh", nil
 				}
-				return "fresh", nil
-			}
 
-			key, err := mappings.Create(ctx, "https://example.com/new", "")
-			require.ErrorIs(t, err, tc.wantErr)
-			require.Equal(t, tc.wantCalls, calls)
-			requireMapping(t, mappings, "taken", "https://example.com/original")
-			require.Equal(t, time.Hour, server.TTL("taken"))
-			if tc.wantErr != nil {
-				require.Empty(t, key)
-				require.Len(t, server.Keys(), 1)
-			} else {
-				require.Equal(t, "fresh", key)
-				requireMapping(t, mappings, key, "https://example.com/new")
-			}
+				key, err := mappings.Create(ctx, "https://example.com/new", "")
+				require.ErrorIs(t, err, tc.wantErr)
+				require.Equal(t, tc.wantCalls, calls)
+				requireMapping(t, mappings, "taken", "https://example.com/original")
+				_, life, err := mappings.store.Resolve(ctx, "taken")
+				require.NoError(t, err)
+				require.Equal(t, remainingLifetime(time.Hour), life, "a collision must not change the holder's lifetime")
+				if tc.wantErr != nil {
+					require.Empty(t, key)
+				} else {
+					require.Equal(t, "fresh", key)
+					requireMapping(t, mappings, key, "https://example.com/new")
+				}
+			})
 		})
 	}
 }
 
 func TestCreateShortURLCustomCollisionDoesNotGenerate(t *testing.T) {
-	server, mappings := newTestMappings(t)
-	ctx := context.Background()
-	require.NoError(t, server.Set("custom", "original"))
-	mappings.generateKey = func() (string, error) {
-		t.Fatal("a custom key must not trigger automatic generation")
-		return "", nil
-	}
-	key, err := mappings.Create(ctx, "replacement", "custom")
-	require.ErrorIs(t, err, errShortKeyExists)
-	require.Empty(t, key)
-	requireMapping(t, mappings, "custom", "original")
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		ctx := context.Background()
+		seedMapping(t, mappings.store, "custom", "original", permanentLifetime)
+		mappings.generateKey = func() (string, error) {
+			t.Fatal("a custom key must not trigger automatic generation")
+			return "", nil
+		}
+		key, err := mappings.Create(ctx, "replacement", "custom")
+		require.ErrorIs(t, err, errShortKeyExists)
+		require.Empty(t, key)
+		requireMapping(t, mappings, "custom", "original")
+	})
 }
 
 func TestCreateShortURLConcurrentClaims(t *testing.T) {
-	_, mappings := newTestMappings(t)
-	ctx := context.Background()
-	const requests = 32
-	type result struct {
-		url string
-		key string
-		err error
-	}
-	results := make(chan result, requests)
-	start := make(chan struct{})
-	for i := 0; i < requests; i++ {
-		go func(i int) {
-			<-start
-			url := fmt.Sprintf("https://example.com/%d", i)
-			key, err := mappings.Create(ctx, url, "contended")
-			results <- result{url: url, key: key, err: err}
-		}(i)
-	}
-	close(start)
-
-	winners := 0
-	var winningURL string
-	for i := 0; i < requests; i++ {
-		r := <-results
-		if r.err == nil {
-			winners++
-			winningURL = r.url
-			require.Equal(t, "contended", r.key)
-		} else {
-			require.ErrorIs(t, r.err, errShortKeyExists)
-			require.Empty(t, r.key)
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		ctx := context.Background()
+		const requests = 32
+		type result struct {
+			url string
+			key string
+			err error
 		}
-	}
-	require.Equal(t, 1, winners)
-	requireMapping(t, mappings, "contended", winningURL)
+		results := make(chan result, requests)
+		start := make(chan struct{})
+		for i := 0; i < requests; i++ {
+			go func(i int) {
+				<-start
+				url := fmt.Sprintf("https://example.com/%d", i)
+				key, err := mappings.Create(ctx, url, "contended")
+				results <- result{url: url, key: key, err: err}
+			}(i)
+		}
+		close(start)
+
+		winners := 0
+		var winningURL string
+		for i := 0; i < requests; i++ {
+			r := <-results
+			if r.err == nil {
+				winners++
+				winningURL = r.url
+				require.Equal(t, "contended", r.key)
+			} else {
+				require.ErrorIs(t, r.err, errShortKeyExists)
+				require.Empty(t, r.key)
+			}
+		}
+		require.Equal(t, 1, winners)
+		requireMapping(t, mappings, "contended", winningURL)
+	})
 }
 
 func TestCreateShortURLStopsOnGenerationError(t *testing.T) {
-	server, mappings := newTestMappings(t)
-	generationErr := errors.New("random source unavailable")
-	calls := 0
-	mappings.generateKey = func() (string, error) {
-		calls++
-		return "partial", generationErr
-	}
-	key, err := mappings.Create(context.Background(), "https://example.com", "")
-	require.ErrorIs(t, err, generationErr)
-	require.Empty(t, key)
-	require.Equal(t, 1, calls)
-	require.Empty(t, server.Keys())
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		generationErr := errors.New("random source unavailable")
+		calls := 0
+		mappings.generateKey = func() (string, error) {
+			calls++
+			return "partial", generationErr
+		}
+		key, err := mappings.Create(context.Background(), "https://example.com", "")
+		require.ErrorIs(t, err, generationErr)
+		require.Empty(t, key)
+		require.Equal(t, 1, calls)
+		requireNotFound(t, mappings, "partial")
+	})
 }
 
 func TestCreateShortURLStopsOnStorageError(t *testing.T) {
-	server, mappings := newTestMappings(t)
-	server.SetError("ERR storage unavailable")
+	mappings := newTestMappings(t)
+	failStorage(mappings)
 	calls := 0
 	mappings.generateKey = func() (string, error) { calls++; return "generated", nil }
 	key, err := mappings.Create(context.Background(), "https://example.com", "")
-	require.EqualError(t, err, "ERR storage unavailable")
+	require.ErrorIs(t, err, errStorageDown)
 	require.Empty(t, key)
 	require.Equal(t, 1, calls)
 }
 
 func TestCreateShortURLStopsOnCanceledContext(t *testing.T) {
-	server, mappings := newTestMappings(t)
-	ctx, cancel := context.WithCancel(context.Background())
-	cancel()
-	key, err := mappings.Create(ctx, "https://example.com", "")
-	require.ErrorIs(t, err, context.Canceled)
-	require.Empty(t, key)
-	require.Empty(t, server.Keys())
+	forEachMappings(t, func(t *testing.T, mappings *shortURLMappings, _ func(time.Duration)) {
+		mappings.generateKey = func() (string, error) { return "generated", nil }
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel()
+		key, err := mappings.Create(ctx, "https://example.com", "")
+		require.ErrorIs(t, err, context.Canceled)
+		require.Empty(t, key)
+		requireNotFound(t, mappings, "generated")
+	})
 }

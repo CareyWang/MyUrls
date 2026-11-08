@@ -19,12 +19,12 @@ func newTestResolveCache(capacity int, ttl time.Duration) (*resolveCache, *testC
 
 func TestResolveCacheEvictsLeastRecentlyUsed(t *testing.T) {
 	cache, _ := newTestResolveCache(2, time.Hour)
-	cache.set("a", "https://example.com/a", -1)
-	cache.set("b", "https://example.com/b", -1)
+	cache.set("a", "https://example.com/a", permanentLifetime)
+	cache.set("b", "https://example.com/b", permanentLifetime)
 	_, ok := cache.get("a")
 	require.True(t, ok)
 
-	cache.set("c", "https://example.com/c", -1)
+	cache.set("c", "https://example.com/c", permanentLifetime)
 
 	_, ok = cache.get("b")
 	require.False(t, ok, "b was used least recently")
@@ -38,25 +38,22 @@ func TestResolveCacheEvictsLeastRecentlyUsed(t *testing.T) {
 func TestResolveCacheEntryLifetime(t *testing.T) {
 	for _, tc := range []struct {
 		name         string
-		remaining    time.Duration
+		life         lifetime
 		wantLifetime time.Duration
 	}{
-		{"limited by cache ttl", 365 * 24 * time.Hour, 5 * time.Minute},
-		{"limited by the mapping", time.Minute, time.Minute},
-		{"mapping that never expires", -1, 5 * time.Minute},
-		{"mapping about to expire", 0, 0},
+		{"limited by cache ttl", remainingLifetime(365 * 24 * time.Hour), 5 * time.Minute},
+		{"limited by the mapping", remainingLifetime(time.Minute), time.Minute},
+		{"mapping that never expires", permanentLifetime, 5 * time.Minute},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cache, clock := newTestResolveCache(2, 5*time.Minute)
-			cache.set("key", "https://example.com", tc.remaining)
+			cache.set("key", "https://example.com", tc.life)
 
-			if tc.wantLifetime > 0 {
-				clock.advance(tc.wantLifetime - time.Second)
-				_, ok := cache.get("key")
-				require.True(t, ok)
-				clock.advance(time.Second)
-			}
+			clock.advance(tc.wantLifetime - time.Second)
 			_, ok := cache.get("key")
+			require.True(t, ok)
+			clock.advance(time.Second)
+			_, ok = cache.get("key")
 			require.False(t, ok)
 			require.Empty(t, cache.entries, "an expired entry must not keep its slot")
 		})
@@ -65,8 +62,8 @@ func TestResolveCacheEntryLifetime(t *testing.T) {
 
 func TestResolveCacheSetReplacesEntry(t *testing.T) {
 	cache, _ := newTestResolveCache(1, time.Hour)
-	cache.set("key", "https://example.com/old", -1)
-	cache.set("key", "https://example.com/new", -1)
+	cache.set("key", "https://example.com/old", permanentLifetime)
+	cache.set("key", "https://example.com/new", permanentLifetime)
 
 	longURL, ok := cache.get("key")
 	require.True(t, ok)
@@ -82,7 +79,7 @@ func TestResolveCacheConcurrentUse(t *testing.T) {
 		go func() {
 			defer wg.Done()
 			shortKey := fmt.Sprintf("key%d", i%16)
-			cache.set(shortKey, "https://example.com", time.Minute)
+			cache.set(shortKey, "https://example.com", remainingLifetime(time.Minute))
 			cache.get(shortKey)
 		}()
 	}
@@ -96,7 +93,7 @@ type countingStore struct {
 	resolves int
 }
 
-func (s *countingStore) Resolve(ctx context.Context, shortKey string) (string, time.Duration, error) {
+func (s *countingStore) Resolve(ctx context.Context, shortKey string) (string, lifetime, error) {
 	s.resolves++
 	return s.mappingStore.Resolve(ctx, shortKey)
 }
@@ -107,7 +104,7 @@ func TestMappingsCacheResolvedURLs(t *testing.T) {
 		counting := &countingStore{mappingStore: store}
 		cache := newResolveCache(8, time.Hour)
 		mappings := newShortURLMappings(counting, cache)
-		_, err := store.Claim(ctx, "key", "https://example.com", time.Hour)
+		_, err := store.Claim(ctx, "key", "https://example.com", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 
 		for range 3 {
@@ -141,7 +138,7 @@ func TestMappingsCacheDoesNotOutliveMapping(t *testing.T) {
 	cache := newResolveCache(8, 365*24*time.Hour)
 	cache.now = clock.now
 	mappings := newShortURLMappings(store, cache)
-	_, err := store.Claim(ctx, "key", "https://example.com/original", time.Hour)
+	_, err := store.Claim(ctx, "key", "https://example.com/original", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 	_, err = mappings.Resolve(ctx, "key")
 	require.NoError(t, err)
@@ -162,7 +159,7 @@ func TestMappingsWithoutCacheAlwaysReadStore(t *testing.T) {
 	ctx := context.Background()
 	counting := &countingStore{mappingStore: store}
 	mappings := newShortURLMappings(counting, nil)
-	_, err := store.Claim(ctx, "key", "https://example.com", time.Hour)
+	_, err := store.Claim(ctx, "key", "https://example.com", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 
 	for range 2 {

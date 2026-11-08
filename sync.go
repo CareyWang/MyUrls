@@ -5,7 +5,6 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"time"
 )
 
 const (
@@ -92,23 +91,12 @@ func syncMappings(ctx context.Context, source *redisStore, target mappingStore, 
 }
 
 func syncMapping(ctx context.Context, source *redisStore, target mappingStore, key string) (bool, error) {
-	longURL, remaining, err := source.Resolve(ctx, key)
+	longURL, life, err := source.Resolve(ctx, key)
 	if errors.Is(err, errShortURLNotFound) {
 		return false, nil
 	}
 	if err != nil {
 		return false, err
 	}
-
-	// A negative lifetime means no expiration, which a zero ttl keeps. A zero
-	// lifetime means the key expires within a millisecond, so it must not
-	// become permanent.
-	if remaining == 0 {
-		return false, nil
-	}
-	var ttl time.Duration
-	if remaining > 0 {
-		ttl = remaining
-	}
-	return target.Claim(ctx, key, longURL, ttl)
+	return target.Claim(ctx, key, longURL, life)
 }

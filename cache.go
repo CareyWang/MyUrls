@@ -51,13 +51,9 @@ func (c *resolveCache) get(shortKey string) (string, bool) {
 	return entry.longURL, true
 }
 
-// set caches a mapping with the given remaining lifetime. A negative lifetime
-// means the mapping never expires.
-func (c *resolveCache) set(shortKey, longURL string, remaining time.Duration) {
-	ttl := c.ttl
-	if remaining >= 0 && remaining < ttl {
-		ttl = remaining
-	}
+// set caches a mapping for no longer than its lifetime.
+func (c *resolveCache) set(shortKey, longURL string, life lifetime) {
+	ttl := life.cappedAt(c.ttl)
 
 	c.mu.Lock()
 	defer c.mu.Unlock()

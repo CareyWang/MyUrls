@@ -38,12 +38,12 @@ func TestSyncMappingsKeepsLifetimes(t *testing.T) {
 	requireStored(t, target, "expiring", "https://example.com/expiring")
 	requireStored(t, target, "forever", "https://example.com/forever")
 
-	_, remaining, err := target.Resolve(context.Background(), "expiring")
+	_, life, err := target.Resolve(context.Background(), "expiring")
 	require.NoError(t, err)
-	require.Equal(t, time.Hour, remaining)
-	_, remaining, err = target.Resolve(context.Background(), "forever")
+	require.Equal(t, remainingLifetime(time.Hour), life)
+	_, life, err = target.Resolve(context.Background(), "forever")
 	require.NoError(t, err)
-	require.Negative(t, remaining, "a permanent key must stay permanent")
+	require.Equal(t, permanentLifetime, life, "a permanent key must stay permanent")
 
 	clock.advance(time.Hour)
 	_, _, err = target.Resolve(context.Background(), "expiring")
@@ -80,7 +80,7 @@ func TestSyncMappingsDoesNotOverwriteAndIsRepeatable(t *testing.T) {
 	ctx := context.Background()
 	require.NoError(t, server.Set("conflict", "https://example.com/from-redis"))
 	require.NoError(t, server.Set("new", "https://example.com/new"))
-	_, err := target.Claim(ctx, "conflict", "https://example.com/from-sqlite", time.Hour)
+	_, err := target.Claim(ctx, "conflict", "https://example.com/from-sqlite", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 
 	result, err := syncMappings(ctx, source, target, 10)

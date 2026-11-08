@@ -74,12 +74,12 @@ func TestStoreResolvesMissingKeyAsNotFound(t *testing.T) {
 func TestStoreClaimDoesNotOverwriteValidMapping(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
 		ctx := context.Background()
-		claimed, err := store.Claim(ctx, "key", "https://example.com/original", time.Hour)
+		claimed, err := store.Claim(ctx, "key", "https://example.com/original", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 		require.True(t, claimed)
 
 		advance(59 * time.Minute)
-		claimed, err = store.Claim(ctx, "key", "https://example.com/replacement", time.Hour)
+		claimed, err = store.Claim(ctx, "key", "https://example.com/replacement", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 		require.False(t, claimed)
 		requireStored(t, store, "key", "https://example.com/original")
@@ -94,27 +94,27 @@ func TestStoreClaimDoesNotOverwriteValidMapping(t *testing.T) {
 func TestStoreClaimReplacesExpiredMapping(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
 		ctx := context.Background()
-		_, err := store.Claim(ctx, "key", "https://example.com/original", time.Hour)
+		_, err := store.Claim(ctx, "key", "https://example.com/original", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 
 		advance(time.Hour)
-		claimed, err := store.Claim(ctx, "key", "https://example.com/replacement", time.Hour)
+		claimed, err := store.Claim(ctx, "key", "https://example.com/replacement", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 		require.True(t, claimed)
 		requireStored(t, store, "key", "https://example.com/replacement")
 	})
 }
 
-func TestStoreZeroTTLNeverExpires(t *testing.T) {
+func TestStorePermanentLifetimeNeverExpires(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
 		ctx := context.Background()
-		claimed, err := store.Claim(ctx, "key", "https://example.com/original", 0)
+		claimed, err := store.Claim(ctx, "key", "https://example.com/original", permanentLifetime)
 		require.NoError(t, err)
 		require.True(t, claimed)
 
 		advance(100 * 365 * 24 * time.Hour)
 		requireStored(t, store, "key", "https://example.com/original")
-		claimed, err = store.Claim(ctx, "key", "https://example.com/replacement", time.Hour)
+		claimed, err = store.Claim(ctx, "key", "https://example.com/replacement", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 		require.False(t, claimed)
 	})
@@ -123,23 +123,79 @@ func TestStoreZeroTTLNeverExpires(t *testing.T) {
 func TestStoreResolveReportsRemainingLifetime(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
 		ctx := context.Background()
-		_, err := store.Claim(ctx, "expiring", "https://example.com", time.Hour)
+		_, err := store.Claim(ctx, "expiring", "https://example.com", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 		advance(20 * time.Minute)
-		_, remaining, err := store.Resolve(ctx, "expiring")
+		_, life, err := store.Resolve(ctx, "expiring")
 		require.NoError(t, err)
-		require.Equal(t, 40*time.Minute, remaining)
+		require.Equal(t, remainingLifetime(40*time.Minute), life)
 
-		_, err = store.Claim(ctx, "forever", "https://example.com", 0)
+		_, err = store.Claim(ctx, "forever", "https://example.com", permanentLifetime)
 		require.NoError(t, err)
-		_, remaining, err = store.Resolve(ctx, "forever")
+		_, life, err = store.Resolve(ctx, "forever")
 		require.NoError(t, err)
-		require.Negative(t, remaining)
+		require.Equal(t, permanentLifetime, life)
 
 		advance(40 * time.Minute)
 		_, _, err = store.Resolve(ctx, "expiring")
 		require.ErrorIs(t, err, errShortURLNotFound)
 	})
+}
+
+func TestStoreClaimRejectsInvalidLifetime(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store mappingStore, _ func(time.Duration)) {
+		ctx := context.Background()
+		for name, life := range map[string]lifetime{
+			"zero value":         {},
+			"zero remaining":     remainingLifetime(0),
+			"negative remaining": remainingLifetime(-time.Second),
+		} {
+			claimed, err := store.Claim(ctx, "key", "https://example.com", life)
+			require.ErrorIs(t, err, errInvalidLifetime, name)
+			require.False(t, claimed, name)
+		}
+		_, _, err := store.Resolve(ctx, "key")
+		require.ErrorIs(t, err, errShortURLNotFound, "a rejected claim must store nothing")
+	})
+}
+
+func TestStoreClaimSubSecondLifetime(t *testing.T) {
+	forEachStore(t, func(t *testing.T, store mappingStore, advance func(time.Duration)) {
+		ctx := context.Background()
+		claimed, err := store.Claim(ctx, "key", "https://example.com", remainingLifetime(500*time.Millisecond))
+		require.NoError(t, err)
+		require.True(t, claimed)
+		requireStored(t, store, "key", "https://example.com")
+
+		// SQLite keeps whole seconds, so it may outlive Redis by up to a second.
+		advance(time.Second)
+		_, _, err = store.Resolve(ctx, "key")
+		require.ErrorIs(t, err, errShortURLNotFound)
+	})
+}
+
+func TestSQLiteStoreRoundsExpiryUpToWholeSeconds(t *testing.T) {
+	store, clock := newTestSQLiteStore(t)
+	clock.advance(300 * time.Millisecond)
+
+	// Rounding down would make this mapping expire before it was written.
+	claimed, err := store.Claim(context.Background(), "key", "https://example.com", remainingLifetime(500*time.Millisecond))
+	require.NoError(t, err)
+	require.True(t, claimed)
+	_, life, err := store.Resolve(context.Background(), "key")
+	require.NoError(t, err)
+	require.Equal(t, remainingLifetime(700*time.Millisecond), life)
+}
+
+func TestRedisStoreResolvesKeyUnderOneMillisecondAsNotFound(t *testing.T) {
+	server := miniredis.RunT(t)
+	store := newRedisStore(server.Addr(), "")
+	t.Cleanup(func() { store.Close() })
+	require.NoError(t, server.Set("key", "https://example.com"))
+	server.SetTTL("key", 500*time.Microsecond) // PTTL reports 0.
+
+	_, _, err := store.Resolve(context.Background(), "key")
+	require.ErrorIs(t, err, errShortURLNotFound)
 }
 
 func TestStoreConcurrentClaimsHaveOneWinner(t *testing.T) {
@@ -152,7 +208,7 @@ func TestStoreConcurrentClaimsHaveOneWinner(t *testing.T) {
 			wg.Add(1)
 			go func() {
 				defer wg.Done()
-				won[i], errs[i] = store.Claim(context.Background(), "contended", fmt.Sprintf("https://example.com/%d", i), time.Hour)
+				won[i], errs[i] = store.Claim(context.Background(), "contended", fmt.Sprintf("https://example.com/%d", i), remainingLifetime(time.Hour))
 			}()
 		}
 		wg.Wait()
@@ -179,7 +235,7 @@ func TestStoreReportsFailureAsErrorNotAbsence(t *testing.T) {
 		require.ErrorIs(t, err, context.Canceled)
 		require.NotErrorIs(t, err, errShortURLNotFound)
 
-		claimed, err := store.Claim(ctx, "key", "https://example.com", time.Hour)
+		claimed, err := store.Claim(ctx, "key", "https://example.com", remainingLifetime(time.Hour))
 		require.ErrorIs(t, err, context.Canceled)
 		require.False(t, claimed)
 	})
@@ -188,7 +244,7 @@ func TestStoreReportsFailureAsErrorNotAbsence(t *testing.T) {
 func TestMappingsRetryCollisionsOnEveryStore(t *testing.T) {
 	forEachStore(t, func(t *testing.T, store mappingStore, _ func(time.Duration)) {
 		ctx := context.Background()
-		_, err := store.Claim(ctx, "taken", "https://example.com/original", time.Hour)
+		_, err := store.Claim(ctx, "taken", "https://example.com/original", remainingLifetime(time.Hour))
 		require.NoError(t, err)
 
 		mappings := &shortURLMappings{store: store}
@@ -211,7 +267,7 @@ func TestSQLiteStoreKeepsMappingsAcrossReopen(t *testing.T) {
 	file := filepath.Join(t.TempDir(), "nested", "dir", "myurls.db")
 	store, err := newSQLiteStore(file)
 	require.NoError(t, err)
-	claimed, err := store.Claim(context.Background(), "key", "https://example.com", time.Hour)
+	claimed, err := store.Claim(context.Background(), "key", "https://example.com", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 	require.True(t, claimed)
 	require.NoError(t, store.Close())
@@ -240,7 +296,7 @@ func TestSQLiteStoreOpensFilePaths(t *testing.T) {
 			store, err := newSQLiteStore(file)
 			require.NoError(t, err)
 			t.Cleanup(func() { store.Close() })
-			_, err = store.Claim(context.Background(), "key", "https://example.com", 0)
+			_, err = store.Claim(context.Background(), "key", "https://example.com", permanentLifetime)
 			require.NoError(t, err)
 			require.FileExists(t, file, "the database must be at the exact configured path")
 		})
@@ -269,17 +325,17 @@ func TestSQLiteStoreConfiguresEveryConnection(t *testing.T) {
 func TestSQLiteStoreDeleteExpiredKeepsValidMappings(t *testing.T) {
 	store, clock := newTestSQLiteStore(t)
 	ctx := context.Background()
-	for shortKey, ttl := range map[string]time.Duration{"expired": time.Hour, "valid": 2 * time.Hour, "forever": 0} {
-		_, err := store.Claim(ctx, shortKey, "https://example.com/"+shortKey, ttl)
+	for shortKey, life := range map[string]lifetime{"expired": remainingLifetime(time.Hour), "valid": remainingLifetime(2 * time.Hour), "forever": permanentLifetime} {
+		_, err := store.Claim(ctx, shortKey, "https://example.com/"+shortKey, life)
 		require.NoError(t, err)
 	}
 
 	clock.advance(time.Hour)
 	// Recreating an expired key must survive the cleanup.
-	_, err := store.Claim(ctx, "recreated", "https://example.com/old", time.Minute)
+	_, err := store.Claim(ctx, "recreated", "https://example.com/old", remainingLifetime(time.Minute))
 	require.NoError(t, err)
 	clock.advance(time.Minute)
-	claimed, err := store.Claim(ctx, "recreated", "https://example.com/new", time.Hour)
+	claimed, err := store.Claim(ctx, "recreated", "https://example.com/new", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 	require.True(t, claimed)
 
@@ -308,7 +364,7 @@ func TestSQLiteStoreOpensExistingSchema(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { store.Close() })
 	requireStored(t, store, "old", "https://example.com/old")
-	claimed, err := store.Claim(context.Background(), "old", "https://example.com/new", time.Hour)
+	claimed, err := store.Claim(context.Background(), "old", "https://example.com/new", remainingLifetime(time.Hour))
 	require.NoError(t, err)
 	require.False(t, claimed)
 }

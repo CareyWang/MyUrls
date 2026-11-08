@@ -114,6 +114,30 @@ func TestLongToShortHandlerAcceptsSubmissionFormats(t *testing.T) {
 	}
 }
 
+func TestLongToShortHandlerBoundsRequestBody(t *testing.T) {
+	previousLogger := logger
+	logger = zap.NewNop().Sugar()
+	t.Cleanup(func() { logger = previousLogger })
+
+	// The longest allowed long URL, with four-byte runes, still fits once encoded.
+	prefix := "https://example.com/"
+	longest := prefix + strings.Repeat("😀", maxLongURLLength-len(prefix))
+	for name, input := range map[string]string{"plain": longest, "base64": encodeBase64(longest)} {
+		t.Run(name, func(t *testing.T) {
+			_, creator := newTestCreator(t)
+			body := []byte(url.Values{"longUrl": {input}}.Encode())
+			response := postShort(t, creator, "application/x-www-form-urlencoded", body)
+			require.Contains(t, response.Body.String(), `"ShortUrl"`)
+		})
+	}
+
+	// A larger body is rejected while reading, before the length rule runs.
+	_, creator := newTestCreator(t)
+	response := postShortJSON(t, creator, map[string]string{"longUrl": prefix + strings.Repeat("a", maxShortRequestBytes)})
+	require.Equal(t, http.StatusOK, response.Code)
+	require.Contains(t, response.Body.String(), `"Message":"invalid parameters"`)
+}
+
 func TestLongToShortHandlerMapsFailures(t *testing.T) {
 	previousLogger := logger
 	logger = zap.NewNop().Sugar()

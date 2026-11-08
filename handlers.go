@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"net/http"
 
 	"github.com/gin-gonic/gin"
 )
@@ -32,6 +33,10 @@ func ShortToLongHandler(mappings *shortURLMappings) gin.HandlerFunc {
 	}
 }
 
+// maxShortRequestBytes bounds the creation request body before it is parsed. It
+// fits the longest allowed long URL in base64 and percent-encoded form.
+const maxShortRequestBytes = 256 << 10
+
 type LongToShortParams struct {
 	LongUrl  string `form:"longUrl" json:"longUrl" binding:"required"`
 	ShortKey string `form:"shortKey" json:"shortKey"`
@@ -43,6 +48,7 @@ func LongToShortHandler(creator *shortURLCreator) gin.HandlerFunc {
 		resp := Response{}
 
 		// check parameters
+		c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, maxShortRequestBytes)
 		req := LongToShortParams{}
 		if err := c.ShouldBind(&req); err != nil {
 			resp.Code = ResponseCodeParamsCheckError

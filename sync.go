@@ -100,7 +100,13 @@ func syncMapping(ctx context.Context, source *redisStore, target mappingStore, k
 		return false, err
 	}
 
-	var ttl time.Duration // Zero keeps a mapping without expiration permanent.
+	// A negative lifetime means no expiration, which a zero ttl keeps. A zero
+	// lifetime means the key expires within a millisecond, so it must not
+	// become permanent.
+	if remaining == 0 {
+		return false, nil
+	}
+	var ttl time.Duration
 	if remaining > 0 {
 		ttl = remaining
 	}

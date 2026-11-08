@@ -51,6 +51,18 @@ func TestSyncMappingsKeepsLifetimes(t *testing.T) {
 	requireStored(t, target, "forever", "https://example.com/forever")
 }
 
+func TestSyncMappingsSkipsKeysAboutToExpire(t *testing.T) {
+	server, source, target, _ := newTestSync(t)
+	require.NoError(t, server.Set("expiring", "https://example.com/expiring"))
+	server.SetTTL("expiring", 500*time.Microsecond) // PTTL reports 0.
+
+	result, err := syncMappings(context.Background(), source, target, 10)
+	require.NoError(t, err)
+	require.Equal(t, syncResult{skipped: 1}, result)
+	_, _, err = target.Resolve(context.Background(), "expiring")
+	require.ErrorIs(t, err, errShortURLNotFound, "an expiring key must not become permanent")
+}
+
 func TestSyncMappingsDoesNotApplyCreationRules(t *testing.T) {
 	server, source, target, _ := newTestSync(t)
 	require.NoError(t, server.Set("short", "javascript:alert(1)"))

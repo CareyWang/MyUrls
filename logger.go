@@ -62,7 +62,6 @@ func initServiceLogger() gin.HandlerFunc {
 
 		_logger.Info(
 			"request",
-			zap.String("time", start.Format(time.RFC3339)),
 			zap.String("method", c.Request.Method),
 			zap.String("ip", c.ClientIP()),
 			zap.String("user-agent", c.Request.UserAgent()),

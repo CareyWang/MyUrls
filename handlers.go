@@ -29,7 +29,7 @@ func ShortToLongHandler(mappings *shortURLMappings) gin.HandlerFunc {
 			return
 		}
 
-		c.Redirect(301, longURL)
+		c.Redirect(302, longURL)
 	}
 }
 

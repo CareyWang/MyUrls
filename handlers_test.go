@@ -34,7 +34,7 @@ func TestShortToLongHandler(t *testing.T) {
 	}
 
 	response := get("/custom")
-	require.Equal(t, http.StatusMovedPermanently, response.Code)
+	require.Equal(t, http.StatusFound, response.Code)
 	require.Equal(t, "https://example.com", response.Header().Get("Location"))
 
 	response = get("/missing")

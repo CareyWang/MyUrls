@@ -319,7 +319,7 @@ curl -X POST https://example.com/short \
 
 #### 响应说明
 
-- **映射存在且有效**：返回 HTTP 状态码 `301 Moved Permanently`，并在 `Location` 响应头中携带长链接。
+- **映射存在且有效**：返回 HTTP 状态码 `302 Found`，并在 `Location` 响应头中携带长链接。浏览器不会持久缓存该跳转，映射过期或短键被重新使用后，访问立即生效。
 - **映射不存在或已过期**：返回 HTTP 状态码 `404 Not Found` 及 JSON 错误信息：
 
   ```json

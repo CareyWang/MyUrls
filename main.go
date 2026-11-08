@@ -2,9 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
+	"os/signal"
+	"syscall"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -60,8 +64,10 @@ func main() {
 
 	InitLogger()
 
-	// start http server
-	if err := run(); err != nil {
+	// start http server, stopping it gracefully on SIGINT or SIGTERM
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	if err := run(ctx); err != nil {
 		logger.Fatalln("server failed: ", err)
 	}
 }
@@ -113,7 +119,11 @@ func newMappingStore() (mappingStore, error) {
 	}
 }
 
-func run() error {
+// shutdownTimeout bounds how long in-flight requests may finish after a stop signal.
+const shutdownTimeout = 10 * time.Second
+
+// run serves until ctx is done, then drains requests and closes the storage.
+func run(ctx context.Context) error {
 	// init and check storage
 	cache, err := newMappingCache()
 	if err != nil {
@@ -139,8 +149,26 @@ func run() error {
 
 	registerRoutes(router, mappings, newShortURLCreator(mappings, proto, domain))
 
+	server := &http.Server{Addr: ":" + port, Handler: router}
+	served := make(chan error, 1)
+	go func() { served <- server.ListenAndServe() }()
 	logger.Infof("server running on :%s", port)
-	return router.Run(fmt.Sprintf(":%s", port))
+
+	select {
+	case err := <-served:
+		return err
+	case <-ctx.Done():
+	}
+	logger.Info("shutting down")
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
+	defer cancel()
+	if err := server.Shutdown(shutdownCtx); err != nil {
+		return err
+	}
+	if err := <-served; !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
 
 func registerRoutes(router *gin.Engine, mappings *shortURLMappings, creator *shortURLCreator) {
